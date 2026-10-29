@@ -4,11 +4,11 @@ import {readFileSync,writeFileSync,realpathSync,mkdirSync} from 'node:fs';
 import {dirname,join,resolve,extname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import Project from '../assets/rehearsal/project.cjs';
-import {validateScene} from './scene-report.mjs';
+import {validateScene,inlineRehearsalIcons} from './scene-report.mjs';
 const here=dirname(fileURLToPath(import.meta.url)),base=resolve(here,'..');
 const read=f=>readFileSync(join(base,f),'utf8');
 export function renderRehearsal(project){
- return Project.standaloneHtml(project,{styles:read('assets/scene-report.css')+'\n'+read('assets/rehearsal/editor.css'),template:read('assets/rehearsal/editor.html'),three:read('assets/vendor/scene3d.bundle.js'),model:read('assets/rehearsal/project.cjs'),controller:read('assets/rehearsal/controller.js'),license:read('assets/vendor/THREE-LICENSE.txt')});
+ return Project.standaloneHtml(project,{styles:read('assets/scene-report.css')+'\n'+read('assets/rehearsal/editor.css'),template:inlineRehearsalIcons(read('assets/rehearsal/editor.html')),three:read('assets/vendor/scene3d.bundle.js'),model:read('assets/rehearsal/project.cjs'),controller:read('assets/rehearsal/controller.js'),license:read('assets/vendor/THREE-LICENSE.txt')});
 }
 
 function option(args,name){const i=args.indexOf(name);if(i<0)return null;if(!args[i+1]||args[i+1].startsWith('--'))throw new Error(name+' 缺少值');return args[i+1];}

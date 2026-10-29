@@ -23,7 +23,7 @@ export function installSceneEditing(Viewer,THREE){
   };
   const pick=e=>{let best=null;for(const item of candidates()){const hit=ray(e).intersectObject(item.root,true).find(h=>h.object.isMesh||h.object.isSprite);if(hit&&(!best||hit.distance<best.distance))best={...item,distance:hit.distance};}return best;};
   const stop=e=>{e.preventDefault();e.stopImmediatePropagation();};
-  const finish=(e,cancel)=>{const d=editing.drag;if(!d)return;stop(e);editing.drag=null;this.controls.enabled=this.mode!=='shot';try{canvas.releasePointerCapture(d.pointerId);}catch{}if(cancel)editing.callbacks.onCancel?.();else editing.callbacks.onCommit?.();};
+  const finish=(e,cancel)=>{const d=editing.drag;if(!d)return;stop(e);editing.drag=null;if(canvas.dataset)delete canvas.dataset.dragging;if(editing.drop){editing.drop.visible=false;this.render();}this.controls.enabled=this.mode!=='shot';try{canvas.releasePointerCapture(d.pointerId);}catch{}if(cancel)editing.callbacks.onCancel?.();else editing.callbacks.onCommit?.();};
   on('pointerdown',e=>{
    if(callbacks.interactive===false||e.button!==0||this.mode==='shot'||editing.callbacks.enabled?.()===false)return;
    if(editing.callbacks.placing?.()){
@@ -35,10 +35,15 @@ export function installSceneEditing(Viewer,THREE){
    else if(hit.kind==='camera'){position=this.pose?.position;height=this.pose?.elevation??this.vol.humanHeight*.78;}
    else{const el=this.sceneData.elements.find(x=>x.id===hit.id);position=el?[el.box[0]+el.box[2]/2,el.box[1]+el.box[3]/2]:null;height=el?.elevation||0;}
    const at=intersect(e,height);if(!position||!at)return;
-   stop(e);editing.drag={kind:hit.kind,id:hit.id,position:[...position],height,at:relative(at),pointerId:e.pointerId};this.controls.enabled=false;try{canvas.setPointerCapture(e.pointerId);}catch{}
+   stop(e);if(canvas.dataset)canvas.dataset.dragging='true';editing.drag={kind:hit.kind,id:hit.id,position:[...position],height,at:relative(at),pointerId:e.pointerId};this.controls.enabled=false;try{canvas.setPointerCapture(e.pointerId);}catch{}
    editing.callbacks.onStart?.({kind:hit.kind,id:hit.id});
   });
-  on('pointermove',e=>{const d=editing.drag;if(!d)return;const at=intersect(e,d.height);if(!at)return;stop(e);const p=relative(at);editing.callbacks.onDrag?.({kind:d.kind,id:d.id,position:d.position.map((n,i)=>clamp(n+p[i]-d.at[i]))});});
+  // 拖拽反馈：默认吸附到 1 格相对网格（按住 Alt 自由移动），地面显示落点环；悬停可拖对象时显示抓手光标。
+  const drop=new THREE.Group();drop.visible=false;drop.renderOrder=13;this.scene.add(drop);editing.drop=drop;
+  const showDrop=(pos,height)=>{if(!drop.children.length){const r=Math.max(.6,(this.vol.humanHeight||8)*.09);const ring=new THREE.Mesh(new THREE.RingGeometry(r*.78,r,40),new THREE.MeshBasicMaterial({color:0x4c8dff,transparent:true,opacity:.95,depthTest:false,toneMapped:false,side:THREE.DoubleSide}));ring.rotation.x=-Math.PI/2;const dot=new THREE.Mesh(new THREE.CircleGeometry(r*.2,20),ring.material.clone());dot.rotation.x=-Math.PI/2;drop.add(ring,dot);}const w=worldPoint(pos,height+.04,this.vol);drop.position.set(...w);drop.visible=true;};
+  let hoverRaf=0,lastHover=null;
+  on('pointermove',e=>{const d=editing.drag;if(!d){if(callbacks.interactive===false||this.mode==='shot'||editing.callbacks.enabled?.()===false||editing.callbacks.placing?.()){if(canvas.dataset.hover)delete canvas.dataset.hover;return;}lastHover=e;if(!hoverRaf)hoverRaf=requestAnimationFrame(()=>{hoverRaf=0;const h=lastHover&&pick(lastHover);if(h)canvas.dataset.hover=h.kind;else delete canvas.dataset.hover;});return;}
+   const at=intersect(e,d.height);if(!at)return;stop(e);const p=relative(at),snap=!e.altKey,pos=d.position.map((n,i)=>{const v=clamp(n+p[i]-d.at[i]);return snap?clamp(Math.round(v)):v;});showDrop(pos,d.height);this.render();editing.callbacks.onDrag?.({kind:d.kind,id:d.id,position:pos,snapped:snap});});
   on('pointerup',e=>finish(e,false));on('pointercancel',e=>finish(e,true));on('lostpointercapture',e=>{if(editing.drag)finish(e,true);});
   on('keydown',e=>{if(editing.callbacks.interactive===false&&['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){stop(e);return;}if(e.key==='Escape'&&editing.drag)finish(e,true);});
  };
@@ -50,7 +55,7 @@ export function installSceneEditing(Viewer,THREE){
   if(selection?.kind==='actor')selected=this.dynamicGroup.children.find(g=>g.userData.kind==='person'&&g.userData.id===selection.id);
   if(selection?.kind==='element')selected=this.staticGroup.children.find(g=>g.userData.elementId===selection.id);
   if(selection?.kind==='camera')selected=this.activeRig?.children.find(g=>g.isGroup);
-  if(selected){selected.updateWorldMatrix(true,true);const box=new THREE.Box3().setFromObject(selected);if(!box.isEmpty()){const helper=new THREE.Box3Helper(box,0xe29a43);helper.material.depthTest=false;helper.renderOrder=12;this.editorOverlay.add(helper);}}
+  if(selected){selected.updateWorldMatrix(true,true);const box=new THREE.Box3().setFromObject(selected);if(!box.isEmpty()){const helper=new THREE.Box3Helper(box,0x4c8dff);helper.material.depthTest=false;helper.renderOrder=12;this.editorOverlay.add(helper);}}
   for(const who of this.note?.subjects||[]){if(!orientations&&!(selection?.kind==='actor'&&selection.id===who.id))continue;const angle=(who.headingDeg||0)*Math.PI/180,direction=new THREE.Vector3(-Math.sin(angle),0,-Math.cos(angle)),at=V(worldPoint(who.position,(who.elevation||0)+.24,this.vol)),length=(who.modelHeight||this.vol.humanHeight)*.46,arrow=new THREE.ArrowHelper(direction,at,length,0x8b6b35,Math.min(1.2,length*.35),Math.min(.65,length*.2));arrow.traverse(o=>{if(o.material){o.material.depthTest=false;o.material.toneMapped=false;}o.renderOrder=9;});this.editorOverlay.add(arrow);}
   for(const path of paths){
    if(!path.start||!path.end)continue;const nodes=path.points?.length?path.points:[path.start,path.end],points=nodes.map(n=>worldPoint(n.position,(n.elevation??path.start.elevation??0)+.3,this.vol)),a=points[0],b=points.at(-1),color=path.kind==='camera'?0x2457df:0xa45a0d;

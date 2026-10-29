@@ -1,18 +1,125 @@
 <template id="rehearsal-template">
 <section id="rehearsal-app" class="rehearsal-app" aria-label="排戏工作台" hidden>
+  <!-- 顶栏：左=返回与方案名；中=撤销重做；右=保存状态、保存、导出、文件、主题（Apple HIG 三组） -->
   <header class="rh-header">
-    <div class="rh-brand"><button id="rh-back" type="button" class="quiet-button">← 返回拉片</button><strong>排戏模式</strong><label class="sr-only" for="rh-title">方案名称</label><input id="rh-title" aria-label="方案名称" maxlength="240"></div>
-    <div class="rh-actions"><button id="rh-undo" type="button">撤销</button><button id="rh-redo" type="button">重做</button><button id="rh-save" type="button" class="primary-button">保存工程</button><button id="rh-theme" type="button" aria-label="切换排戏明暗主题">明暗</button></div>
+    <div class="rh-brand">
+      <button id="rh-back" type="button" class="rh-btn rh-ghost" data-tip="返回只读拉片" aria-label="返回拉片"><i data-rh-icon="arrow-left"></i><span class="rh-lbl">拉片</span></button>
+      <span class="rh-mark" aria-hidden="true" title="排戏"><i data-rh-icon="clapperboard"></i></span>
+      <label class="sr-only" for="rh-title">方案名称</label><input id="rh-title" class="rh-title" aria-label="方案名称" maxlength="240" data-tip="点击重命名方案">
+    </div>
+    <div class="rh-group" role="group" aria-label="撤销与重做">
+      <button id="rh-undo" type="button" class="rh-btn rh-icon" aria-label="撤销" data-tip="撤销" data-kbd="⌘Z"><i data-rh-icon="undo-2"></i></button>
+      <button id="rh-redo" type="button" class="rh-btn rh-icon" aria-label="重做" data-tip="重做" data-kbd="⇧⌘Z"><i data-rh-icon="redo-2"></i></button>
+    </div>
+    <div class="rh-actions">
+      <span id="rh-save-state" class="rh-save-state" role="status" data-state="idle"><i class="rh-save-dot" aria-hidden="true"></i><span id="rh-save-text">尚未保存</span></span>
+      <button id="rh-save" type="button" class="rh-btn rh-primary" data-tip="下载工程文件，之后可重新打开继续编辑" data-kbd="⌘S"><i data-rh-icon="save"></i><span class="rh-lbl">保存工程</span></button>
+      <div class="rh-menu-wrap">
+        <button id="rh-export-menu-button" type="button" class="rh-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="rh-export-menu" data-tip="导出图片或页面" data-kbd="E"><i data-rh-icon="download"></i><span class="rh-lbl">导出</span><i data-rh-icon="chevron-down"></i></button>
+        <div id="rh-export-menu" class="rh-menu" role="menu" aria-label="导出" hidden>
+          <button id="rh-export-frame" type="button" role="menuitem"><i data-rh-icon="image"></i><span><b>分镜图</b><small>当前摄影机拍到的画面，PNG</small></span></button>
+          <button id="rh-export-top" type="button" role="menuitem"><i data-rh-icon="map"></i><span><b>走位图</b><small>俯视全部人物与摄影机路线，PNG</small></span></button>
+          <button id="rh-export-page" type="button" role="menuitem"><i data-rh-icon="file-code-2"></i><span><b>可播放页面</b><small>离线单文件 HTML，不含原片与分析</small></span></button>
+        </div>
+      </div>
+      <div class="rh-menu-wrap">
+        <button id="rh-file-menu-button" type="button" class="rh-btn rh-icon" aria-haspopup="menu" aria-expanded="false" aria-controls="rh-file-menu" aria-label="方案文件" data-tip="更多：新建、打开、主题"><i data-rh-icon="ellipsis"></i></button>
+        <div id="rh-file-menu" class="rh-menu" role="menu" aria-label="方案文件" hidden>
+          <button id="rh-new" type="button" role="menuitem"><i data-rh-icon="file-plus"></i><span><b>新建方案</b><small>空白片场，两名替身人物</small></span></button>
+          <button id="rh-demo" type="button" role="menuitem"><i data-rh-icon="sparkles"></i><span><b>排戏示例</b><small>看一个两镜头的完整示范</small></span></button>
+          <button id="rh-copy-all" type="button" role="menuitem"><i data-rh-icon="copy"></i><span><b>复制整段拉片</b><small>每个原片镜头变成一镜方案</small></span></button>
+          <button id="rh-open" type="button" role="menuitem"><i data-rh-icon="folder-open"></i><span><b>打开工程…</b><small>之前保存的 .json 工程</small></span></button>
+          <button id="rh-restore" type="button" role="menuitem"><i data-rh-icon="history"></i><span><b>恢复本机草稿</b><small>浏览器里缓存的上次编辑</small></span></button>
+          <span class="rh-menu-sep" role="separator"></span>
+          <button id="rh-theme" type="button" role="menuitem" aria-label="切换排戏明暗主题"><i data-rh-icon="sun" class="rh-sun"></i><i data-rh-icon="moon" class="rh-moon"></i><span><b>切换明暗</b><small>深色 / 浅色界面</small></span></button>
+        </div>
+      </div>
+      <input id="rh-file" type="file" accept=".json,application/json" hidden>
+    </div>
   </header>
-  <div class="rh-commandbar"><div><button id="rh-new" type="button">新建</button><button id="rh-demo" type="button">排戏示例</button><button id="rh-copy-all" type="button">复制整段拉片</button><button id="rh-open" type="button">打开工程</button><input id="rh-file" type="file" accept=".json,application/json" hidden><button id="rh-restore" type="button">恢复本机草稿</button></div><span id="rh-save-state" role="status">尚未保存</span></div>
   <main class="rh-workspace">
-    <aside class="rh-library" aria-label="人物与布景"><div class="rh-section-heading"><h2>人物</h2><button id="rh-add-actor" type="button">添加</button></div><label class="sr-only" for="rh-actor-preset">添加新人物或复用已有角色</label><select id="rh-actor-preset" aria-label="添加新人物或复用已有角色"><option value="">新人物</option></select><div id="rh-actors" class="rh-object-list"></div><div class="rh-section-heading"><h2>布景</h2></div><div class="rh-add-prop"><label class="sr-only" for="rh-prop-preset">布景种类</label><select id="rh-prop-preset" aria-label="布景种类"><option value="table">桌子</option><option value="chair">座椅</option><option value="door">门框</option><option value="wall">墙体</option><option value="window">窗户</option><option value="stage">台面</option></select><button id="rh-add-prop" type="button">添加</button></div><div id="rh-elements" class="rh-object-list"></div><div class="rh-scene-reference"><button id="rh-scene-reference" type="button">添加场景参考图</button><img id="rh-scene-reference-image" alt="场景参考，仅用于构图对照" hidden></div><div class="rh-library-footer"><button id="rh-camera-object" type="button">选中摄影机</button><p>造型参考图不是三维还原；当前人物是排戏替身。</p></div></aside>
-    <section class="rh-stage-panel" aria-label="可编辑三维片场"><div class="rh-panel-heading"><h2 id="rh-scene-name">我的片场</h2><div class="rh-view-buttons"><button id="rh-overview" type="button" aria-pressed="true">片场</button><button id="rh-top" type="button" aria-pressed="false">俯视</button><button id="rh-observe" type="button" aria-pressed="false">只转着看</button></div></div><div id="rh-stage" class="rh-stage"></div><div class="rh-stage-tools"><div role="group" aria-label="编辑动作位置"><button id="rh-start" type="button" aria-pressed="true">设置起点</button><button id="rh-end" type="button" aria-pressed="false">设置终点</button></div><button id="rh-place" type="button">点地面摆放</button><label><input id="rh-paths" type="checkbox" checked>显示路线</label></div><p id="rh-edit-hint" class="rh-hint">拖动人物、蓝色摄影机或它们的文字标签。空白处仅旋转查看。</p></section>
-    <aside class="rh-detail" aria-label="机位画面与选中对象"><section class="rh-preview-panel" aria-label="当前摄影机画面"><div class="rh-panel-heading"><h2>这一机拍到的画面</h2><button id="rh-export-frame" type="button">导出分镜图</button></div><div id="rh-preview" class="rh-preview"></div></section><section class="rh-inspector"><div class="rh-section-heading"><h2 id="rh-selection-title">摄影机</h2><button id="rh-delete-object" type="button">移除</button></div><p id="rh-scope" class="rh-hint">仅编辑当前镜头。</p><div id="rh-properties"></div></section></aside>
+    <aside class="rh-library" aria-label="人物与布景">
+      <section class="rh-card">
+        <div class="rh-section-heading"><h2><i data-rh-icon="user"></i>人物</h2><span id="rh-actor-count" class="rh-count"></span></div>
+        <div id="rh-actors" class="rh-object-list" role="list"></div>
+        <div class="rh-add-row"><label class="sr-only" for="rh-actor-preset">添加新人物或复用已有角色</label><select id="rh-actor-preset" aria-label="添加新人物或复用已有角色"><option value="">新人物</option></select><button id="rh-add-actor" type="button" class="rh-btn rh-icon rh-soft" aria-label="添加人物" data-tip="添加人物" data-kbd="A"><i data-rh-icon="user-plus"></i></button></div>
+      </section>
+      <section class="rh-card">
+        <div class="rh-section-heading"><h2><i data-rh-icon="video"></i>摄影机</h2></div>
+        <div class="rh-object-list"><button id="rh-camera-object" type="button" class="rh-obj" data-tip="选中本镜摄影机" data-kbd="C"><span class="rh-swatch rh-cam" aria-hidden="true"></span><span>本镜摄影机</span></button></div>
+      </section>
+      <section class="rh-card rh-grow">
+        <div class="rh-section-heading"><h2><i data-rh-icon="box"></i>布景</h2></div>
+        <div id="rh-elements" class="rh-object-list"></div>
+        <div class="rh-add-row rh-add-prop"><label class="sr-only" for="rh-prop-preset">布景种类</label><select id="rh-prop-preset" aria-label="布景种类"><option value="table">桌子</option><option value="chair">座椅</option><option value="door">门框</option><option value="wall">墙体</option><option value="window">窗户</option><option value="stage">台面</option></select><button id="rh-add-prop" type="button" class="rh-btn rh-icon rh-soft" aria-label="添加布景" data-tip="添加布景"><i data-rh-icon="plus"></i></button></div>
+        <div class="rh-scene-reference"><button id="rh-scene-reference" type="button" class="rh-btn rh-dashed"><i data-rh-icon="image"></i><span>场景参考图</span></button><img id="rh-scene-reference-image" alt="场景参考，仅用于构图对照" hidden></div>
+      </section>
+      <p class="rh-footnote">参考图不是三维还原；人物是排戏替身。</p>
+    </aside>
+    <section class="rh-stage-panel" aria-label="可编辑三维片场">
+      <div class="rh-panel-heading">
+        <h2><i data-rh-icon="layers"></i><span id="rh-scene-name">我的片场</span></h2>
+        <div class="rh-seg rh-view-buttons" role="group" aria-label="片场视角"><button id="rh-overview" type="button" aria-pressed="true" data-tip="斜看整个片场"><i data-rh-icon="box"></i>片场</button><button id="rh-top" type="button" aria-pressed="false" data-tip="从正上方看走位"><i data-rh-icon="map"></i>俯视</button></div>
+      </div>
+      <div id="rh-stage" class="rh-stage">
+        <div id="rh-empty" class="rh-empty" hidden><span class="rh-empty-icon"><i data-rh-icon="user-plus"></i></span><b>这一镜还没有人物</b><p>先在左侧添加一个人物，再把它拖到想站的位置。</p><button id="rh-empty-add" type="button" class="rh-btn rh-primary"><i data-rh-icon="user-plus"></i>添加人物</button></div>
+        <ol id="rh-guide" class="rh-guide" aria-label="排戏三步" hidden><li data-step="1"><span>1</span>选中人物或摄影机</li><li data-step="2"><span>2</span>拖到起点，切到终点再拖</li><li data-step="3"><span>3</span>播放预演</li><button id="rh-guide-close" type="button" class="rh-btn rh-icon rh-ghost" aria-label="关闭引导"><i data-rh-icon="x"></i></button></ol>
+        <!-- 片场浮动工具条（Figma 式底部工具条）：操作方式 | 起终点 | 路线 -->
+        <div class="rh-toolbar" role="toolbar" aria-label="片场工具">
+          <div class="rh-seg" role="group" aria-label="操作方式">
+            <button id="rh-select-tool" type="button" aria-pressed="true" aria-label="选择与拖动" data-tip="选择与拖动" data-kbd="V"><i data-rh-icon="mouse-pointer-2"></i></button>
+            <button id="rh-place" type="button" aria-pressed="false" aria-label="点地面摆放所选" data-tip="点地面摆放所选" data-kbd="P"><i data-rh-icon="crosshair"></i></button>
+            <button id="rh-observe" type="button" aria-pressed="false" aria-label="只转着看" data-tip="只转着看，不改站位" data-kbd="O"><i data-rh-icon="eye"></i></button>
+          </div>
+          <span class="rh-sep" aria-hidden="true"></span>
+          <div class="rh-seg rh-endpoints" role="group" aria-label="编辑动作位置">
+            <button id="rh-start" type="button" aria-pressed="true" data-tip="摆这一镜开始时的位置" data-kbd="1"><i data-rh-icon="flag"></i>起点</button>
+            <button id="rh-end" type="button" aria-pressed="false" data-tip="摆这一镜结束时的位置" data-kbd="2"><i data-rh-icon="flag-triangle-right"></i>终点</button>
+          </div>
+          <span class="rh-sep" aria-hidden="true"></span>
+          <label class="rh-switch-chip" data-tip="显示所选对象的移动路线"><i data-rh-icon="route"></i><span class="rh-lbl">路线</span><input id="rh-paths" type="checkbox" checked><span class="rh-switch" aria-hidden="true"></span></label>
+        </div>
+      </div>
+      <p id="rh-edit-hint" class="rh-hint" aria-live="polite">拖动人物、蓝色摄影机或它们的文字标签。空白处仅旋转查看。</p>
+    </section>
+    <aside class="rh-detail" aria-label="机位画面与选中对象">
+      <section class="rh-preview-panel" aria-label="当前摄影机画面">
+        <div class="rh-panel-heading"><h2><i data-rh-icon="camera"></i>机位画面</h2><span id="rh-preview-badge" class="rh-badge">起点</span></div>
+        <div id="rh-preview" class="rh-preview"></div>
+      </section>
+      <section class="rh-inspector" aria-labelledby="rh-selection-title">
+        <div class="rh-section-heading rh-inspector-head"><h2><span id="rh-selection-kind" class="rh-kind" aria-hidden="true"></span><span id="rh-selection-title">摄影机</span></h2><button id="rh-delete-object" type="button" class="rh-btn rh-icon rh-danger" aria-label="移除所选" data-tip="移除所选" data-kbd="Delete"><i data-rh-icon="trash-2"></i></button></div>
+        <p id="rh-scope" class="rh-hint">仅编辑当前镜头。</p>
+        <div id="rh-properties"></div>
+      </section>
+    </aside>
   </main>
-  <footer class="rh-dock"><div class="rh-playbar"><button id="rh-prev" type="button" aria-label="上一排戏镜头">上一镜</button><button id="rh-play" type="button" class="primary-button">播放预演</button><button id="rh-next" type="button" aria-label="下一排戏镜头">下一镜</button><output id="rh-time" class="mono">0:00.00</output><input id="rh-seek" type="range" min="0" max="6" value="0" step="0.01" aria-label="排戏预演进度"><output id="rh-total" class="mono">0:06.00</output><button id="rh-export-top" type="button">导出走位图</button><button id="rh-export-page" type="button">导出可播放页面</button></div><div class="rh-shot-heading"><span>镜头</span><button id="rh-clone-shot" type="button">复制当前镜头</button><button id="rh-left-shot" type="button" aria-label="当前镜头前移">前移</button><button id="rh-right-shot" type="button" aria-label="当前镜头后移">后移</button><button id="rh-delete-shot" type="button">删除当前镜头</button></div><div id="rh-shots" class="rh-shots" role="toolbar" aria-label="排戏镜头顺序"></div></footer>
+  <footer class="rh-dock">
+    <div class="rh-playbar">
+      <div class="rh-group" role="group" aria-label="预演播放">
+        <button id="rh-prev" type="button" class="rh-btn rh-icon" aria-label="上一排戏镜头" data-tip="上一镜"><i data-rh-icon="skip-back"></i></button>
+        <button id="rh-play" type="button" class="rh-btn rh-primary rh-play" data-tip="播放预演" data-kbd="Space"><span class="rh-play-icons" aria-hidden="true"><i data-rh-icon="play" class="rh-i-play"></i><i data-rh-icon="pause" class="rh-i-pause"></i></span><span id="rh-play-label">播放预演</span></button>
+        <button id="rh-next" type="button" class="rh-btn rh-icon" aria-label="下一排戏镜头" data-tip="下一镜"><i data-rh-icon="skip-forward"></i></button>
+      </div>
+      <output id="rh-time" class="mono">0:00.00</output>
+      <div class="rh-seek-wrap"><span id="rh-seek-marks" class="rh-seek-marks" aria-hidden="true"></span><span class="rh-seek-fill" aria-hidden="true"></span><input id="rh-seek" type="range" min="0" max="6" value="0" step="0.01" aria-label="排戏预演进度"></div>
+      <output id="rh-total" class="mono">0:06.00</output>
+      <div class="rh-shot-heading rh-group" role="group" aria-label="镜头操作">
+        <button id="rh-clone-shot" type="button" class="rh-btn rh-icon" aria-label="复制当前镜头" data-tip="复制当前镜头"><i data-rh-icon="copy"></i></button>
+        <button id="rh-left-shot" type="button" class="rh-btn rh-icon" aria-label="当前镜头前移" data-tip="前移"><i data-rh-icon="chevron-left"></i></button>
+        <button id="rh-right-shot" type="button" class="rh-btn rh-icon" aria-label="当前镜头后移" data-tip="后移"><i data-rh-icon="chevron-right"></i></button>
+        <button id="rh-delete-shot" type="button" class="rh-btn rh-icon rh-danger" aria-label="删除当前镜头" data-tip="删除当前镜头"><i data-rh-icon="trash-2"></i></button>
+      </div>
+    </div>
+    <div class="rh-shot-row">
+      
+      <div id="rh-shots" class="rh-shots" role="toolbar" aria-label="排戏镜头顺序"></div>
+    </div>
+  </footer>
   <div id="rh-notice" class="rh-notice" role="status" aria-live="polite" hidden></div>
+  <div id="rh-tip" class="rh-tip" role="tooltip" hidden></div>
   <input id="rh-scene-reference-file" type="file" accept="image/png,image/jpeg,image/webp" hidden>
   <input id="rh-reference-file" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+  <script type="application/json" id="rh-icons">{}</script>
 </section>
 </template>

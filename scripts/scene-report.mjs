@@ -251,6 +251,14 @@ export function loadIcons(directory=join(HERE,'../assets/vendor/lucide')) {
   }
   return icons;
 }
+// 排戏模板图标离线内联：<i data-rh-icon="名称"></i> → Lucide SVG；并把动态用到的图标写入 #rh-icons。
+const RH_DYNAMIC_ICONS=['chevron-down','chevron-up','plus','user','video','box','check','circle-alert','circle-dot','image','trash-2','x','move'];
+export function inlineRehearsalIcons(html,icons=loadIcons()){
+  const svg=(name,cls='')=>{if(!icons[name])throw new Error('排戏图标缺失：'+name);return `<svg class="icon${cls?' '+cls:''}" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">${icons[name]}</svg>`;};
+  let out=html.replace(/<i data-rh-icon="([a-z0-9-]+)"(?: class="([a-z0-9 -]+)")?><\/i>/g,(_,n,c)=>svg(n,c));
+  const dyn={};for(const n of RH_DYNAMIC_ICONS){if(!icons[n])throw new Error('排戏图标缺失：'+n);dyn[n]=icons[n];}
+  return out.replace('<script type="application/json" id="rh-icons">{}</script>',()=>'<script type="application/json" id="rh-icons">'+JSON.stringify(dyn).replace(/</g,'\\u003c')+'</script>');
+}
 export function renderReport(shots, scene, {baseDir=process.cwd(), outDir=baseDir, video=shots.source} = {}) {
   const checks = validateScene(shots, scene);
   if (!checks.ok) throw new Error('场景结构校验失败：\n'+checks.errors.join('\n'));
@@ -266,7 +274,7 @@ export function renderReport(shots, scene, {baseDir=process.cwd(), outDir=baseDi
     '/*REPORT_3D*/':readFileSync(join(HERE,'../assets/vendor/scene3d.bundle.js'),'utf8'),
     '/*REPORT_SCRIPT*/':readFileSync(join(HERE,'../assets/scene-report.js'),'utf8'),
     '/*REPORT_REHEARSAL_STYLE*/':readFileSync(join(HERE,'../assets/rehearsal/editor.css'),'utf8'),
-    '<!--REPORT_REHEARSAL_TEMPLATE-->':readFileSync(join(HERE,'../assets/rehearsal/editor.html'),'utf8'),
+    '<!--REPORT_REHEARSAL_TEMPLATE-->':inlineRehearsalIcons(readFileSync(join(HERE,'../assets/rehearsal/editor.html'),'utf8'),payload.icons),
     '/*REPORT_REHEARSAL_MODEL*/':readFileSync(join(HERE,'../assets/rehearsal/project.cjs'),'utf8'),
     '/*REPORT_REHEARSAL_LICENSE*/':readFileSync(join(HERE,'../assets/vendor/THREE-LICENSE.txt'),'utf8').replace(/</g,'&lt;'),
     '/*REPORT_REHEARSAL_SCRIPT*/':readFileSync(join(HERE,'../assets/rehearsal/controller.js'),'utf8'),
