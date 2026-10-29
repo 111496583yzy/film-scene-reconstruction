@@ -1,4 +1,5 @@
 import copy
+import base64
 import importlib.util
 import io
 import json
@@ -16,7 +17,35 @@ SHOTS=json.loads((ROOT/'examples/scene-demo-shots.json').read_text());SCENE=json
 
 
 def config():
-    return {m.PREFIX+k:v for k,v in {'API_BASE_URL':'https://provider.example/v1','MODEL':'vendor/test-model','PROTOCOL':'gemini_generate_content','REQUEST_PATH':'/v1beta/models/{model}:generateContent','AUTH_HEADER':'Authorization','AUTH_SCHEME':'Bearer','API_KEY':'test-key-not-for-real-use','MAX_REQUEST_BYTES':'1000000','MAX_OUTPUT_TOKENS':'1500','TIMEOUT_SECONDS':'10'}.items()}
+    return {m.PREFIX+k:v for k,v in {'INPUT_MODE':'inline','API_BASE_URL':'https://provider.example/v1','MODEL':'vendor/test-model','PROTOCOL':'gemini_generate_content','REQUEST_PATH':'/v1beta/models/{model}:generateContent','AUTH_HEADER':'Authorization','AUTH_SCHEME':'Bearer','API_KEY':'test-key-not-for-real-use','MAX_REQUEST_BYTES':'1000000','MAX_OUTPUT_TOKENS':'1500','TIMEOUT_SECONDS':'10'}.items()}
+
+
+def url_config():
+    c=config();c.pop(m.PREFIX+'INPUT_MODE')  # Exercise the actual default, not an explicitly selected mode.
+    c.update({m.PREFIX+'UPLOAD_API_URL':'https://upload.example/media/binary',m.PREFIX+'MAX_UPLOAD_BYTES':'1000000'})
+    return c
+
+
+MEDIA_URI='https://media.example/video.mp4?signature=private-test-signature'
+
+
+def upload_response(code=0, **overrides):
+    return {'code':code,'message':'success','data':dict({'download_url':MEDIA_URI,'type':'video'},**overrides)}
+
+
+def model_response():
+    text=json.dumps(analysis(),ensure_ascii=False)
+    return {'candidates':[{'finishReason':'STOP','content':{'parts':[{'text':text[i:i+7]} for i in range(0,len(text),7)]}}],
+            'usageMetadata':{'promptTokensDetails':[{'modality':'VIDEO','tokenCount':100}]}}
+
+
+class FakeOpener:
+    def __init__(self,*responses):self.responses=list(responses);self.requests=[]
+    def open(self,request,timeout):
+        self.requests.append(request)
+        item=self.responses.pop(0)
+        if isinstance(item,Exception):raise item
+        return io.BytesIO(json.dumps(item).encode())
 
 
 def analysis():
@@ -128,5 +157,199 @@ class TestNativeVideo(unittest.TestCase):
             self.assertEqual(json.loads(cp.read_text()),SCENE)
     def test_redirect_refused(self):
         self.assertRaises(ValueError,m.NoRedirect().redirect_request,None,None,307,'redirect',{},'https://elsewhere.example')
+
+
+class TestUploadedVideo(unittest.TestCase):
+    def inputs(self,root):
+        v=root/'v.mp4';v.write_bytes(b'opaque original media bytes')
+        sp=root/'shots.json';cp=root/'scene.json';sp.write_text(json.dumps(SHOTS));cp.write_text(json.dumps(SCENE))
+        return v,cp,['--video',str(v),'--shots',str(sp),'--scene',str(cp),'--output-dir',str(root/'run')]
+
+    def test_default_is_url_and_preflight_has_no_sendable_body(self):
+        with tempfile.TemporaryDirectory() as t:
+            p=Path(t)/'v.mp4';p.write_bytes(b'x'*65536);c=url_config();c[m.PREFIX+'MAX_REQUEST_BYTES']='20000'
+            body,prov=m.build_request(c,p,SHOTS)
+            self.assertIsNone(body);self.assertEqual(prov['input_mode'],'native_video_url')
+            self.assertIsNone(prov['request_bytes']);self.assertLess(prov['request_bytes_minimum'],20000)
+            self.assertEqual(prov['video_bytes'],65536)
+
+    def test_url_body_contains_file_data_not_base64(self):
+        with tempfile.TemporaryDirectory() as t:
+            p=Path(t)/'v.mp4';p.write_bytes(b'opaque');c=url_config();c[m.PREFIX+'VIDEO_FPS']='4'
+            body,prov=m.build_request(c,p,SHOTS,MEDIA_URI);parts=json.loads(body)['contents'][0]['parts']
+            self.assertEqual(parts[0]['fileData'],{'mimeType':'video/mp4','fileUri':MEDIA_URI})
+            self.assertEqual(parts[0]['videoMetadata']['fps'],4)
+            self.assertNotIn('inlineData',body.decode());self.assertNotIn(MEDIA_URI,json.dumps(prov))
+            self.assertEqual(prov['request_bytes'],len(body))
+
+    def test_missing_upload_configuration_cannot_fallback(self):
+        with tempfile.TemporaryDirectory() as t:
+            p=Path(t)/'v.mp4';p.write_bytes(b'fake');c=config();c.pop(m.PREFIX+'INPUT_MODE')
+            with self.assertRaisesRegex(ValueError,'UPLOAD_API_URL'):m.build_request(c,p,SHOTS)
+
+    def test_upload_endpoint_requires_explicit_https_without_credentials_or_query(self):
+        for value in ['', 'http://upload.example/path','https://u:p@upload.example/x','https://upload.example/x?key=bad','https://upload.example/x#bad','https://upload.example/\npath']:
+            with self.subTest(value=value):
+                c=url_config();c[m.PREFIX+'UPLOAD_API_URL']=value;self.assertRaises(ValueError,m.upload_url,c)
+
+    def test_input_mode_cannot_guess_other_transports(self):
+        c=url_config();c[m.PREFIX+'INPUT_MODE']='frames';self.assertRaises(ValueError,m.input_mode,c)
+
+    def test_bad_media_urls_not_sent(self):
+        for uri in ['', 'http://media.example/video.mp4','https://u:p@media.example/x','https://media.example/x#fragment','https://media.example/\nfile']:
+            with self.subTest(uri=uri):self.assertRaises(ValueError,m.validate_media_uri,uri)
+
+    def test_upload_budget_and_timeout_preflight(self):
+        with tempfile.TemporaryDirectory() as t:
+            p=Path(t)/'v.mp4';p.write_bytes(b'12345')
+            for key,value in [('MAX_UPLOAD_BYTES','0'),('MAX_UPLOAD_BYTES','4'),('UPLOAD_TIMEOUT_SECONDS','0')]:
+                c=url_config();c[m.PREFIX+key]=value
+                with self.subTest(key=key,value=value):self.assertRaises(ValueError,m.build_request,c,p,SHOTS)
+            c=url_config();c[m.PREFIX+'MAX_UPLOAD_BYTES']='5';self.assertIsNone(m.build_request(c,p,SHOTS)[0])
+
+    def test_model_prompt_budget_is_checked_before_upload(self):
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t);v,cp,args=self.inputs(root);c=url_config();c[m.PREFIX+'MAX_REQUEST_BYTES']='1'
+            with mock.patch.object(m,'load_config',return_value=c),mock.patch.object(m,'verify_video_against_shots'),mock.patch.object(m,'upload_video') as upload:
+                self.assertRaises(ValueError,m.main,args+['--execute']);upload.assert_not_called()
+
+    def test_actual_url_request_budget_can_stop_after_upload_without_model_call(self):
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t);v,cp,args=self.inputs(root);c=url_config()
+            minimum=m.build_request(c,v,SHOTS)[1]['request_bytes_minimum'];c[m.PREFIX+'MAX_REQUEST_BYTES']=str(minimum+1)
+            opener=FakeOpener(upload_response())
+            with mock.patch.object(m,'load_config',return_value=c),mock.patch.object(m,'verify_video_against_shots'),mock.patch.object(m.urllib.request,'build_opener',return_value=opener):
+                self.assertRaises(RuntimeError,m.main,args+['--execute'])
+            state=json.loads((root/'run/request-status.json').read_text())
+            self.assertEqual(state['upload_state'],'succeeded');self.assertEqual(state['analysis_attempts'],0)
+            self.assertEqual(len(opener.requests),1);self.assertEqual(json.loads(cp.read_text()),SCENE)
+
+    def test_dry_run_does_not_touch_network_or_create_ledger(self):
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t);v,cp,args=self.inputs(root)
+            with mock.patch.object(m,'load_config',return_value=url_config()),mock.patch.object(m,'verify_video_against_shots'),mock.patch.object(m,'upload_video') as upload,mock.patch.object(m,'remote_call') as remote,mock.patch('sys.stdout',new_callable=io.StringIO) as output:
+                m.main(args);d=json.loads(output.getvalue());self.assertEqual(d['input_mode'],'native_video_url')
+                self.assertEqual(d['upload_endpoint'],'https://upload.example/media/binary');upload.assert_not_called();remote.assert_not_called()
+            self.assertFalse((root/'run/request-status.json').exists());self.assertEqual(json.loads(cp.read_text()),SCENE)
+
+    def test_upload_preserves_bytes_and_uses_separate_key_and_timeout(self):
+        with tempfile.TemporaryDirectory() as t:
+            p=Path(t)/'v.mp4';raw=b'opaque original bytes';p.write_bytes(raw);c=url_config();c[m.PREFIX+'UPLOAD_API_KEY']='upload-only-key';c[m.PREFIX+'UPLOAD_TIMEOUT_SECONDS']='27'
+            opener=mock.Mock();opener.open.return_value=io.BytesIO(json.dumps(upload_response(size=str(len(raw)))).encode())
+            uri,meta=m.upload_video(c,p,m.sha256_file(p),opener)
+            self.assertEqual(uri,MEDIA_URI);self.assertNotIn(MEDIA_URI,json.dumps(meta))
+            req=opener.open.call_args.args[0];self.assertIn(raw,req.data);self.assertNotIn(base64.b64encode(raw),req.data)
+            self.assertEqual(req.get_header('Authorization'),'Bearer upload-only-key');self.assertIn('multipart/form-data',req.get_header('Content-type'))
+            self.assertEqual(opener.open.call_args.kwargs['timeout'],27)
+
+    def test_upload_success_codes(self):
+        with tempfile.TemporaryDirectory() as t:
+            p=Path(t)/'v.mp4';p.write_bytes(b'fake')
+            for code in [0,200]:
+                with self.subTest(code=code):self.assertEqual(m.upload_video(url_config(),p,m.sha256_file(p),FakeOpener(upload_response(code)))[0],MEDIA_URI)
+
+    def test_invalid_upload_responses_are_not_model_inputs(self):
+        responses=[{'code':500,'message':'bad'}, {'code':False,'data':{'download_url':MEDIA_URI}}, {'code':0,'data':{'fileName':'input/x.mp4'}},
+                   upload_response(download_url='http://media.example/x.mp4'),upload_response(type='image'),upload_response(size='999'),upload_response(size='invalid')]
+        with tempfile.TemporaryDirectory() as t:
+            p=Path(t)/'v.mp4';p.write_bytes(b'fake')
+            for response in responses:
+                opener=FakeOpener(response)
+                with self.subTest(response=response):self.assertRaises(ValueError,m.upload_video,url_config(),p,m.sha256_file(p),opener)
+                self.assertEqual(len(opener.requests),1)
+
+    def test_file_changed_after_preflight_stops_before_upload(self):
+        with tempfile.TemporaryDirectory() as t:
+            p=Path(t)/'v.mp4';p.write_bytes(b'before');digest=m.sha256_file(p);p.write_bytes(b'after');opener=FakeOpener()
+            self.assertRaises(ValueError,m.upload_video,url_config(),p,digest,opener);self.assertFalse(opener.requests)
+
+    def test_upload_failure_has_no_model_call_or_retry(self):
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t);v,cp,args=self.inputs(root);opener=FakeOpener(TimeoutError('upload timeout'))
+            with mock.patch.object(m,'load_config',return_value=url_config()),mock.patch.object(m,'verify_video_against_shots'),mock.patch.object(m.urllib.request,'build_opener',return_value=opener):
+                self.assertRaises(RuntimeError,m.main,args+['--execute']);self.assertRaises(ValueError,m.main,args+['--execute'])
+            state=json.loads((root/'run/request-status.json').read_text())
+            self.assertEqual(state['analysis_attempts'],0);self.assertEqual(state['upload_state'],'failed_or_unknown')
+            self.assertEqual(len(opener.requests),1);self.assertEqual(json.loads(cp.read_text()),SCENE)
+
+    def test_redirect_stops_instead_of_changing_upload_domain(self):
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t);v,cp,args=self.inputs(root);opener=FakeOpener(ValueError('带密钥请求不跟随重定向'))
+            with mock.patch.object(m,'load_config',return_value=url_config()),mock.patch.object(m,'verify_video_against_shots'),mock.patch.object(m.urllib.request,'build_opener',return_value=opener):
+                self.assertRaises(RuntimeError,m.main,args+['--execute'])
+            self.assertEqual(len(opener.requests),1);self.assertEqual(json.loads((root/'run/request-status.json').read_text())['analysis_attempts'],0)
+
+    def test_full_url_flow_fragmented_response_and_no_secrets_in_artifacts(self):
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t);v,cp,args=self.inputs(root);c=url_config();c[m.PREFIX+'UPLOAD_API_KEY']='test-upload-key'
+            response=model_response();response['echo']={'key':c[m.PREFIX+'API_KEY'],'upload_key':c[m.PREFIX+'UPLOAD_API_KEY'],'url':MEDIA_URI}
+            opener=FakeOpener(upload_response(),response)
+            with mock.patch.object(m,'load_config',return_value=c),mock.patch.object(m,'verify_video_against_shots'),mock.patch.object(m.urllib.request,'build_opener',return_value=opener),mock.patch('sys.stdout',new_callable=io.StringIO) as output:
+                m.main(args+['--execute']);self.assertRaises(ValueError,m.main,args+['--execute'])
+                logs=output.getvalue()
+            self.assertEqual([r.full_url for r in opener.requests],['https://upload.example/media/binary',m.request_url(c)])
+            sent=json.loads(opener.requests[1].data);self.assertEqual(sent['contents'][0]['parts'][0]['fileData']['fileUri'],MEDIA_URI)
+            state=json.loads((root/'run/request-status.json').read_text());self.assertEqual(state['state'],'completed')
+            self.assertEqual((state['upload_attempts'],state['analysis_attempts']),(1,1));self.assertFalse(state['applied'])
+            self.assertTrue(state['provenance']['video_input_confirmed']);self.assertEqual(json.loads(cp.read_text()),SCENE)
+            artifacts='\n'.join(p.read_text() for p in (root/'run').iterdir() if p.is_file())+logs
+            for private in [MEDIA_URI,'private-test-signature',c[m.PREFIX+'API_KEY'],c[m.PREFIX+'UPLOAD_API_KEY']]:self.assertNotIn(private,artifacts)
+            self.assertEqual((root/'run/request-status.json').stat().st_mode & 0o777,0o600)
+
+    def test_analysis_failure_after_upload_does_not_reupload_or_leak_url(self):
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t);v,cp,args=self.inputs(root);c=url_config();msg='bad '+MEDIA_URI+' '+c[m.PREFIX+'API_KEY']
+            error=urllib.error.HTTPError(m.request_url(c),400,'bad',{},io.BytesIO(msg.encode()));opener=FakeOpener(upload_response(),error)
+            with mock.patch.object(m,'load_config',return_value=c),mock.patch.object(m,'verify_video_against_shots'),mock.patch.object(m.urllib.request,'build_opener',return_value=opener):
+                with self.assertRaises(RuntimeError) as raised:m.main(args+['--execute'])
+                self.assertRaises(ValueError,m.main,args+['--execute'])
+            state=json.loads((root/'run/request-status.json').read_text());self.assertEqual(state['upload_state'],'succeeded');self.assertEqual(state['analysis_state'],'failed_or_unknown')
+            for private in [MEDIA_URI,c[m.PREFIX+'API_KEY']]:self.assertNotIn(private,json.dumps(state)+str(raised.exception))
+            self.assertEqual(len(opener.requests),2);self.assertEqual(json.loads(cp.read_text()),SCENE)
+
+    def test_redaction_handles_credentials_split_across_text_chunks(self):
+        c=url_config();c[m.PREFIX+'UPLOAD_API_KEY']='split-upload-secret'
+        text=json.dumps({'echo':MEDIA_URI+' '+c[m.PREFIX+'API_KEY']+' '+c[m.PREFIX+'UPLOAD_API_KEY']})
+        response={'candidates':[{'content':{'parts':[{'text':text[i:i+5]} for i in range(0,len(text),5)]}}]}
+        safe=m.sanitize(response,c,MEDIA_URI);serialized=json.dumps(safe);parsed=m.parse_answer(m.answer_text(safe))
+        for private in [MEDIA_URI,'private-test-signature',c[m.PREFIX+'API_KEY'],c[m.PREFIX+'UPLOAD_API_KEY']]:
+            self.assertNotIn(private,serialized);self.assertNotIn(private,parsed['echo'])
+
+    def test_bad_model_json_preserves_response_and_stops(self):
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t);v,cp,args=self.inputs(root);opener=FakeOpener(upload_response(),{'candidates':[{'content':{'parts':[{'text':'not JSON'}]}}]})
+            with mock.patch.object(m,'load_config',return_value=url_config()),mock.patch.object(m,'verify_video_against_shots'),mock.patch.object(m.urllib.request,'build_opener',return_value=opener):
+                self.assertRaises(RuntimeError,m.main,args+['--execute'])
+            self.assertTrue((root/'run/provider-response.json').is_file());self.assertEqual(len(opener.requests),2)
+
+    def test_http_success_without_video_usage_is_not_video_confirmation(self):
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t);v,cp,args=self.inputs(root);response=model_response();response['usageMetadata']={};opener=FakeOpener(upload_response(),response)
+            with mock.patch.object(m,'load_config',return_value=url_config()),mock.patch.object(m,'verify_video_against_shots'),mock.patch.object(m.urllib.request,'build_opener',return_value=opener),mock.patch('sys.stdout',new_callable=io.StringIO):m.main(args+['--execute'])
+            self.assertFalse(json.loads((root/'run/analysis.json').read_text())['provenance']['video_input_confirmed'])
+
+    def test_exclusive_ledger_preserves_first_run(self):
+        with tempfile.TemporaryDirectory() as t:
+            p=Path(t)/'ledger.json';m.reserve_run(p,{'state':'first'});self.assertRaises(ValueError,m.reserve_run,p,{'state':'second'});self.assertEqual(json.loads(p.read_text()),{'state':'first'})
+
+    def test_adjacent_text_parts_do_not_insert_newlines(self):
+        r={'candidates':[{'content':{'parts':[{'text':'{"video'},{'thought':True,'text':'ignore'},{'text':'_observed":true}'}]}}]}
+        self.assertEqual(m.parse_answer(m.answer_text(r)),{'video_observed':True})
+
+    def test_multiple_candidates_are_not_joined(self):
+        r={'candidates':[{'content':{'parts':[{'text':'{"first":true}'}]}},{'content':{'parts':[{'text':'{"other":true}'}]}}]}
+        self.assertEqual(m.parse_answer(m.answer_text(r)),{'first':True})
+
+    def test_truncated_response_is_not_success(self):
+        self.assertRaises(ValueError,m.answer_text,{'candidates':[{'finishReason':'MAX_TOKENS','content':{'parts':[{'text':'{}'}]}}]})
+
+    def test_reviewed_offline_apply_never_uploads_or_calls_model(self):
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t);v,cp,args=self.inputs(root);answer=root/'reviewed.json'
+            prov={'model':'test','input_mode':'native_video_url','video_sha256':m.sha256_file(v),'timeline_binding':m.machine_binding(SHOTS),'review':{'approved':True}}
+            answer.write_text(json.dumps({'analysis':analysis(),'provenance':prov}))
+            with mock.patch.object(m,'verify_video_against_shots'),mock.patch.object(m,'load_config') as load,mock.patch.object(m,'upload_video') as upload,mock.patch.object(m,'remote_call') as remote,mock.patch('sys.stdout',new_callable=io.StringIO):
+                m.main(args+['--response-file',str(answer),'--apply']);load.assert_not_called();upload.assert_not_called();remote.assert_not_called()
+            self.assertTrue((root/'scene.before-model.json').exists());self.assertEqual(json.loads(cp.read_text())['setups'],SCENE['setups'])
 
 if __name__=='__main__':unittest.main()

@@ -107,7 +107,7 @@ node {baseDir}/scripts/scene-report.mjs render shots.json scene.json --out scene
 
 ## 可选原视频模型复核
 
-用户明确提供模型接入并授权当前素材外部分析时，先读 [video-model-analysis.md](references/video-model-analysis.md)，用本目录 `video_model_enrich.py`。先核实网关原始视频输入，不把图片能力当成视频支持。先dry-run，再一次受限调用；失败不自动重试、不抽帧降级。配置只在本机受保护文件中，不能塞进本Skill或报告。
+用户明确提供模型接入并授权当前素材外部分析时，先读 [video-model-analysis.md](references/video-model-analysis.md)，用本目录 `video_model_enrich.py`。**默认先通过已配置的上传接口提交原视频，获取 `download_url`，再以视频 URL 交给模型复核**；不再默认把视频编码进模型请求。先核实网关的视频输入，不把图片能力当成视频支持。先 dry-run，再执行一次上传和一次模型请求；分别记账，任一步失败或超时都不自动重试、换域名、转码或抽帧降级。配置和密钥只在本机受保护文件中；临时视频 URL 不进入日志或报告。此默认只决定复核方式，不代替当前素材的外部分析授权。
 
 模型只提供候选。复核画面依据、近似时刻和等效口径后，离线归并到视野估计。展示“模型候选”和“真实参数待核实”两层，不因换了大模型就把推测升级为实测；机位、灯位和机器时间轴仍受独立证据约束。
 

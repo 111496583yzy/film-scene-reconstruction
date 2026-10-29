@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Opt-in, single-call native-video analysis. No automatic retries or frame-only fallback.
+"""Opt-in native-video review: upload once, then submit its URL to the model once.
 
 Credentials/configuration are external. Dry-run does not upload media. Remote execution
-writes a ledger before sending; applying reviewed results is a separate offline action.
+writes a ledger before sending; inline input requires explicit configuration. No automatic
+retries or frame-only fallback. Applying reviewed results is a separate offline action.
 """
 from __future__ import annotations
 import argparse
@@ -19,6 +20,7 @@ import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -69,7 +71,24 @@ def load_config(path: Path | None, environ: dict | None = None) -> dict:
         if not values.get(PREFIX+key): raise ValueError('缺少配置 '+PREFIX+key)
     if values[PREFIX+'PROTOCOL'] != 'gemini_generate_content':
         raise ValueError('本适配器只接受已核对的原生Gemini协议，不自动换用图片或其他协议')
+    input_mode(values)
     return values
+
+
+def input_mode(config: dict) -> str:
+    mode = config.get(PREFIX+'INPUT_MODE', 'upload_url')
+    if mode not in {'upload_url', 'inline'}:
+        raise ValueError('INPUT_MODE 只支持 upload_url 或显式选择的 inline，不自动降级')
+    return mode
+
+
+def upload_url(config: dict) -> str:
+    value = config.get(PREFIX+'UPLOAD_API_URL', '')
+    url = urllib.parse.urlsplit(value)
+    if (url.scheme != 'https' or not url.hostname or url.username or url.password
+            or url.query or url.fragment or any(c.isspace() for c in value)):
+        raise ValueError('UPLOAD_API_URL 必须配置为已核对的完整HTTPS上传接口，不猜测域名或跟随重定向')
+    return value
 
 
 def request_url(config: dict) -> str:
@@ -90,7 +109,33 @@ def request_url(config: dict) -> str:
 
 def redact(text: str, secret: str = '') -> str:
     if secret: text = text.replace(secret, '<REDACTED>')
+    # Signed media URLs are access credentials too. Do not persist their queries.
+    text = re.sub(r'https?://[^\s<>"\x27\\]+', lambda m: '<MEDIA_URL_REDACTED>' if '?' in m[0] else m[0], text)
     return re.sub(r'[A-Za-z0-9+/]{160,}={0,2}', '<LONG_DATA_REDACTED>', text)
+
+
+def sanitize(value: Any, config: dict, media_uri: str = '') -> Any:
+    if isinstance(value, dict):
+        # Reassemble adjacent gateway text chunks before redaction as well as parsing;
+        # a key or signed URL echoed across chunk boundaries must not survive in the saved response.
+        if isinstance(value.get('parts'),list):
+            parts=[]
+            for part in value['parts']:
+                if (parts and isinstance(part,dict) and isinstance(parts[-1],dict)
+                        and set(part)<={'text','thought'} and set(parts[-1])<={'text','thought'}
+                        and bool(part.get('thought'))==bool(parts[-1].get('thought'))
+                        and isinstance(part.get('text'),str) and isinstance(parts[-1].get('text'),str)):
+                    parts[-1]={**parts[-1],'text':parts[-1]['text']+part['text']}
+                else: parts.append(part)
+            value={**value,'parts':parts}
+        return {k:sanitize(v,config,media_uri) for k,v in value.items()}
+    if isinstance(value, list): return [sanitize(v,config,media_uri) for v in value]
+    if not isinstance(value, str): return value
+    if media_uri:
+        value = value.replace(media_uri, '<MEDIA_URL_REDACTED>').replace(media_uri.replace('/', '\\/'), '<MEDIA_URL_REDACTED>')
+    for key in ['API_KEY', 'UPLOAD_API_KEY']:
+        value = redact(value, config.get(PREFIX+key, ''))
+    return value
 
 
 def machine_binding(shots: dict) -> str:
@@ -123,12 +168,23 @@ def verify_video_against_shots(video: Path, shots: dict, shots_path: Path) -> No
         raise ValueError('视频尺寸或片长与镜头底稿不一致，未上传')
 
 
-def build_request(config: dict, video: Path, shots: dict) -> tuple[bytes, dict]:
+def build_request(config: dict, video: Path, shots: dict, video_uri: str | None = None) -> tuple[bytes | None, dict]:
     for field in ['MAX_REQUEST_BYTES','MAX_OUTPUT_TOKENS','TIMEOUT_SECONDS']:
         if int(config[PREFIX+field])<=0: raise ValueError('本机资源预算必须为正数')
     mime = {'.mp4':'video/mp4','.mov':'video/quicktime','.webm':'video/webm'}.get(video.suffix.lower())
     if not mime: raise ValueError('未支持的本地视频容器；不自动转码或用抽帧替代')
-    part = {'inlineData':{'mimeType':mime,'data':base64.b64encode(video.read_bytes()).decode('ascii')}}
+    mode = input_mode(config)
+    if mode == 'upload_url':
+        upload_url(config)
+        if int(config.get(PREFIX+'MAX_UPLOAD_BYTES', '0')) <= 0: raise ValueError('需配置正数 MAX_UPLOAD_BYTES 作为本机视频上传预算')
+        if video.stat().st_size > int(config[PREFIX+'MAX_UPLOAD_BYTES']): raise ValueError('视频超过本机 MAX_UPLOAD_BYTES 预算；未上传，不自动转码或切换模式')
+        if int(config.get(PREFIX+'UPLOAD_TIMEOUT_SECONDS', config[PREFIX+'TIMEOUT_SECONDS'])) <= 0: raise ValueError('上传超时预算必须为正数')
+        if video_uri is not None: validate_media_uri(video_uri)
+        # The empty URI is only a local size preflight; an incomplete body is never returned for sending.
+        part = {'fileData':{'mimeType':mime,'fileUri':video_uri or ''}}
+    else:
+        if video_uri: raise ValueError('inline 模式不能同时传入视频URL')
+        part = {'inlineData':{'mimeType':mime,'data':base64.b64encode(video.read_bytes()).decode('ascii')}}
     if config.get(PREFIX+'VIDEO_FPS'):
         fps = float(config[PREFIX+'VIDEO_FPS'])
         if not math.isfinite(fps) or fps <= 0: raise ValueError('视频采样率必须为正数')
@@ -136,8 +192,25 @@ def build_request(config: dict, video: Path, shots: dict) -> tuple[bytes, dict]:
     payload = {'contents':[{'role':'user','parts':[part,{'text':make_prompt(shots)}]}],
                'generationConfig':{'temperature':0.2,'maxOutputTokens':int(config[PREFIX+'MAX_OUTPUT_TOKENS']),'responseMimeType':'application/json'}}
     body = json.dumps(payload, ensure_ascii=False, separators=(',',':')).encode()
-    if len(body) > int(config[PREFIX+'MAX_REQUEST_BYTES']): raise ValueError('请求超过本机配置的上传预算；未上传，也不会自动降级成抽帧')
-    return body, {'input_mode':'native_video_inline','mime_type':mime,'video_sha256':sha256_file(video),'video_bytes':video.stat().st_size,'request_bytes':len(body),'timeline_binding':machine_binding(shots),'duration_seconds':shots['meta']['durationSeconds'],'model':config[PREFIX+'MODEL'],'protocol':config[PREFIX+'PROTOCOL']}
+    if len(body) > int(config[PREFIX+'MAX_REQUEST_BYTES']): raise ValueError('模型JSON请求超过本机 MAX_REQUEST_BYTES 预算；不自动切换输入方式')
+    pending = mode == 'upload_url' and video_uri is None
+    return (None if pending else body), {'input_mode':'native_video_url' if mode == 'upload_url' else 'native_video_inline','mime_type':mime,'video_sha256':sha256_file(video),'video_bytes':video.stat().st_size,'request_bytes':None if pending else len(body),'request_bytes_minimum':len(body) if pending else None,'timeline_binding':machine_binding(shots),'duration_seconds':shots['meta']['durationSeconds'],'model':config[PREFIX+'MODEL'],'protocol':config[PREFIX+'PROTOCOL']}
+
+
+def validate_media_uri(value: str) -> None:
+    url = urllib.parse.urlsplit(value)
+    if (url.scheme != 'https' or not url.hostname or url.username or url.password
+            or url.fragment or any(c.isspace() for c in value)):
+        raise ValueError('上传响应没有合法的HTTPS视频URL；不拼接 fileName，不调用模型')
+
+
+def auth_value(config: dict, upload: bool = False) -> str:
+    secret = config.get(PREFIX+'UPLOAD_API_KEY') if upload else None
+    secret = secret or config.get(PREFIX+'API_KEY','')
+    if not secret or any(c in secret for c in '\r\n'): raise ValueError('缺少合法的本机API Key')
+    scheme = 'Bearer' if upload else config.get(PREFIX+'AUTH_SCHEME','')
+    if any(c in scheme for c in '\r\n'): raise ValueError('认证前缀不合法')
+    return (scheme+' '+secret).strip()
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -145,28 +218,58 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         raise ValueError('带密钥请求不跟随重定向')
 
 
-def remote_call(config: dict, body: bytes, opener=None) -> dict:
-    secret = config.get(PREFIX+'API_KEY','')
-    if not secret or any(c in secret for c in '\r\n'): raise ValueError('缺少合法的本机API Key')
-    header = config[PREFIX+'AUTH_HEADER']
-    if header.lower() not in {'authorization','x-goog-api-key'}: raise ValueError('认证Header未支持')
-    value = (config.get(PREFIX+'AUTH_SCHEME','')+' '+secret).strip()
-    request = urllib.request.Request(request_url(config), data=body, method='POST', headers={'Content-Type':'application/json',header:value})
+def request_json(config: dict, request, timeout: int, label: str, opener=None) -> dict:
     opener = opener or urllib.request.build_opener(NoRedirect)
     try:
-        with opener.open(request, timeout=int(config[PREFIX+'TIMEOUT_SECONDS'])) as response:
-            return json.load(response)
+        with opener.open(request, timeout=timeout) as response:
+            result = json.load(response)
+            if not isinstance(result,dict): raise ValueError(label+'未返回JSON对象')
+            return result
     except urllib.error.HTTPError as error:
-        text = redact(error.read(2000).decode('utf8','replace'), secret)
+        text = sanitize(error.read(2000).decode('utf8','replace'), config)
         try:
             parsed = json.loads(text);text = parsed.get('error',{}).get('message') or parsed.get('message') or text
         except (ValueError,AttributeError): pass
-        raise RuntimeError(f'远程HTTP {error.code}：'+str(text)[:500]) from None
+        raise RuntimeError(f'{label}HTTP {error.code}：'+str(text)[:500]) from None
+
+
+def upload_video(config: dict, video: Path, expected_sha256: str, opener=None) -> tuple[str, dict]:
+    endpoint = upload_url(config)
+    if video.stat().st_size > int(config[PREFIX+'MAX_UPLOAD_BYTES']): raise ValueError('视频超过上传预算，未上传')
+    data = video.read_bytes()
+    if len(data) > int(config[PREFIX+'MAX_UPLOAD_BYTES']): raise ValueError('视频超过上传预算，未上传')
+    if hashlib.sha256(data).hexdigest() != expected_sha256: raise ValueError('视频在预检后发生变化，未上传')
+    mime = {'.mp4':'video/mp4','.mov':'video/quicktime','.webm':'video/webm'}[video.suffix.lower()]
+    boundary = 'film-'+uuid.uuid4().hex
+    # Use a neutral ASCII filename. Upload unchanged original bytes, with no base64 or transcoding.
+    body = (f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="video{video.suffix.lower()}"\r\nContent-Type: {mime}\r\n\r\n').encode()+data+f'\r\n--{boundary}--\r\n'.encode()
+    request = urllib.request.Request(endpoint,data=body,method='POST',headers={'Authorization':auth_value(config,upload=True),'Content-Type':'multipart/form-data; boundary='+boundary})
+    result = request_json(config,request,int(config.get(PREFIX+'UPLOAD_TIMEOUT_SECONDS',config[PREFIX+'TIMEOUT_SECONDS'])),'上传接口',opener)
+    code = result.get('code')
+    if type(code) is not int or code not in {0,200} or not isinstance(result.get('data'),dict):
+        raise ValueError('上传失败：'+sanitize(str(result.get('message') or result.get('msg') or code),config))
+    media = result['data'];uri = media.get('download_url')
+    if not isinstance(uri,str) or not uri: raise ValueError('上传响应缺少 download_url；不把 fileName 当外链，不调用模型')
+    validate_media_uri(uri)
+    if media.get('type') not in {None,'video'}: raise ValueError('上传响应的资源类型不是视频，不调用模型')
+    if media.get('size') is not None and int(media['size']) != len(data): raise ValueError('上传响应的文件大小与原视频不一致，不调用模型')
+    return uri, {'response_code':code,'media_type':media.get('type'),'video_bytes':len(data),'url_returned':True}
+
+
+def remote_call(config: dict, body: bytes, opener=None) -> dict:
+    header = config[PREFIX+'AUTH_HEADER']
+    if header.lower() not in {'authorization','x-goog-api-key'}: raise ValueError('认证Header未支持')
+    request = urllib.request.Request(request_url(config), data=body, method='POST', headers={'Content-Type':'application/json',header:auth_value(config)})
+    return request_json(config,request,int(config[PREFIX+'TIMEOUT_SECONDS']),'模型接口',opener)
 
 
 def answer_text(response: dict) -> str:
-    parts = [p.get('text','') for c in response.get('candidates',[]) for p in c.get('content',{}).get('parts',[]) if not p.get('thought') and isinstance(p.get('text'),str)]
-    text = '\n'.join(parts).strip()
+    candidates = response.get('candidates') or []
+    candidate = candidates[0] if candidates else {}
+    if candidate.get('finishReason') not in {None,'STOP'}: raise ValueError('模型输出未正常完成：'+str(candidate['finishReason']))
+    parts = [p['text'] for p in candidate.get('content',{}).get('parts',[]) if not p.get('thought') and isinstance(p.get('text'),str)]
+    # A gateway may split a JSON string/key across adjacent text parts. Inserting a newline corrupts it.
+    text = ''.join(parts).strip()
     if not text: raise ValueError('接口没有返回可验证的文本结果；不把HTTP成功当作视频能力通过')
     return text
 
@@ -238,6 +341,15 @@ def reviewed_merge(scene: dict, data: dict, shots: dict, provenance: dict) -> di
     return result
 
 
+def reserve_run(ledger: Path, state: dict) -> None:
+    try: fd = os.open(ledger, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        raise ValueError('此输出目录已有请求记录，拒绝重复调用；先核查已有结果/计费状态') from None
+    with os.fdopen(fd, 'w', encoding='utf8') as stream:
+        json.dump(state, stream, ensure_ascii=False, indent=2)
+        stream.write('\n')
+
+
 def main(argv=None):
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--video',type=Path,required=True);p.add_argument('--shots',type=Path,required=True);p.add_argument('--scene',type=Path,required=True);p.add_argument('--output-dir',type=Path,required=True)
@@ -273,30 +385,49 @@ def main(argv=None):
         else: print('离线模型结果结构验证通过；未写回。')
         return
     config=load_config(args.env_file);url=request_url(config);body,provenance=build_request(config,args.video,shots)
-    summary={**provenance,'endpoint':url,'credentials_configured':bool(config.get(PREFIX+'API_KEY')),'execute':args.execute,'automatic_retries':0,'frame_only_fallback':False}
+    mode=input_mode(config)
+    summary={**provenance,'endpoint':url,'upload_endpoint':upload_url(config) if mode=='upload_url' else None,'max_upload_bytes':int(config[PREFIX+'MAX_UPLOAD_BYTES']) if mode=='upload_url' else None,'credentials_configured':bool(config.get(PREFIX+'API_KEY')),'execute':args.execute,'automatic_retries':0,'frame_only_fallback':False}
     if not args.execute: print(json.dumps(summary,ensure_ascii=False,indent=2));return
-    if not config.get(PREFIX+'API_KEY'): raise ValueError('缺少本机API Key，未发出请求')
+    auth_value(config)
+    if config[PREFIX+'AUTH_HEADER'].lower() not in {'authorization','x-goog-api-key'}: raise ValueError('认证Header未支持')
+    if mode=='upload_url': auth_value(config,upload=True)
     args.output_dir.mkdir(parents=True,exist_ok=True);ledger=args.output_dir/'request-status.json'
-    if ledger.exists(): raise ValueError('此输出目录已有请求记录，拒绝重复调用；先核查已有结果/计费状态')
-    provenance['requested_at_utc']=datetime.now(timezone.utc).isoformat();write_json(ledger,{'state':'sending','provenance':provenance})
+    provenance['requested_at_utc']=datetime.now(timezone.utc).isoformat()
+    state={'state':'prepared','provenance':provenance,'upload_state':'not_started','analysis_state':'not_started','upload_attempts':0,'analysis_attempts':0,'applied':False}
+    reserve_run(ledger,state)
+    media_uri=''
     try:
+        if mode=='upload_url':
+            state.update(state='uploading',upload_state='started',upload_attempts=1);write_json(ledger,state)
+            media_uri,upload_summary=upload_video(config,args.video,provenance['video_sha256'])
+            provenance['upload']=upload_summary
+            state.update(state='uploaded',upload_state='succeeded');write_json(ledger,state)
+            body,current=build_request(config,args.video,shots,video_uri=media_uri)
+            if current['video_sha256']!=provenance['video_sha256']: raise ValueError('视频在上传后发生变化，不调用模型')
+            provenance.update(request_bytes=current['request_bytes'],request_bytes_minimum=None)
+        if body is None: raise ValueError('视频URL尚未就绪，不发送不完整模型请求')
+        state.update(state='analyzing',analysis_state='started',analysis_attempts=1);write_json(ledger,state)
         response=remote_call(config,body)
-        safe=json.loads(redact(json.dumps(response,ensure_ascii=False),config.get(PREFIX+'API_KEY','')))
+        safe=sanitize(response,config,media_uri)
         write_json(args.output_dir/'provider-response.json',safe)
-        provenance['usage']=response.get('usageMetadata',{})
+        state.update(state='validating',analysis_state='returned');write_json(ledger,state)
+        provenance['usage']=safe.get('usageMetadata') or {}
         details=provenance['usage'].get('promptTokensDetails',[])
         provenance['video_input_confirmed']=any(str(d.get('modality','')).upper()=='VIDEO' and d.get('tokenCount',0)>0 for d in details)
         provenance['audio_verification']='视频音轨原样提交；未做独立听写验收'
-        text=answer_text(response);parsed=parse_answer(text)
+        text=answer_text(safe);parsed=parse_answer(text)
         write_json(args.output_dir/'analysis-candidate.json',{'provenance':provenance,'analysis':parsed})
         data=validate_analysis(parsed,shots)
         write_json(args.output_dir/'analysis.json',{'provenance':provenance,'analysis':data})
-        write_json(ledger,{'state':'completed','provenance':provenance,'analysis_valid':True,'applied':False})
+        state.update(state='completed',analysis_state='validated_structure',analysis_valid=True);write_json(ledger,state)
         print('原视频请求完成且逐镜JSON验证通过；尚未写回报告，需复核后离线归并。')
-        print(json.dumps({'model':provenance['model'],'input_mode':provenance['input_mode'],'shots':len(data['shots']),'usage':provenance['usage']},ensure_ascii=False))
+        print(json.dumps({'model':provenance['model'],'input_mode':provenance['input_mode'],'shots':len(data['shots']),'video_input_confirmed':provenance['video_input_confirmed'],'usage':provenance['usage']},ensure_ascii=False))
     except Exception as error:
-        message=redact(str(error),config.get(PREFIX+'API_KEY',''))
-        write_json(ledger,{'state':'failed','provenance':provenance,'error':message,'retry_performed':False,'note':'未改原报告；超时/中断时上游计费状态可能未知，需核查后再决定新调用。'})
+        message=sanitize(str(error),config,media_uri)
+        if state['upload_state']=='started': state['upload_state']='failed_or_unknown'
+        if state['analysis_state']=='started': state['analysis_state']='failed_or_unknown'
+        state.update(state='failed',error=message,retry_performed=False,note='未改原报告；不自动重新上传/请求模型/切换域名或输入方式。已开始的请求若超时或中断，其上传/计费结果可能未知，先核查记录。')
+        write_json(ledger,state)
         raise RuntimeError(message) from None
 
 if __name__=='__main__':
