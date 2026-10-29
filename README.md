@@ -1,5 +1,9 @@
 # 电影机位与灯光推演 · Film Scene Reconstruction
 
+[![像素星云：AI 生图、AI 视频、商品图和无限画布，点击访问官网](assets/readme/pixel-nebula-banner.svg)](https://www.yzycolour.top/)
+
+<p align="center"><strong><a href="https://www.yzycolour.top/">立即体验像素星云 · www.yzycolour.top →</a></strong></p>
+
 一个独立的 Codex Skill：给一段电影或视频，拆镜头、分析人物与摄影机调度、推演来光，并生成与原片同步的三维拉片工作台。
 
 ## 能做什么
@@ -12,10 +16,6 @@
 - 可选：经授权调用原生视频模型复核视野倾向，保留估计前提、可信度和原始参数待核实状态。
 
 **这是有证据的拍摄方案推演，不是摄影测量或剧组参数读取器。** 焦距、机高和灯具没有原始资料时，不会把模型估计伪装成实测。
-
-> **拉片之后，继续创作。**
->
-> 也欢迎试试我们做的 [像素星云](https://www.yzycolour.top/)：AI 生图、AI 视频、商品图和无限画布，把镜头里的灵感变成自己的作品。
 
 ## 在 Codex 中使用
 
