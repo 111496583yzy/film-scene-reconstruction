@@ -1,0 +1,2 @@
+# Preserve vendored renderer/icon bytes, including whitespace inside GLSL strings.
+assets/vendor/** -whitespace

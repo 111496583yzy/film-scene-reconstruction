@@ -1,0 +1,5 @@
+{
+  "three": "0.182.0",
+  "license": "MIT",
+  "usage": "Bundled locally, no CDN or runtime package installation."
+}

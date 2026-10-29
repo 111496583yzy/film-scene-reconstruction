@@ -1,0 +1,570 @@
+{
+  "schemaVersion": 2,
+  "title": "合成示例 · 仅供功能测试",
+  "binding": {
+    "fingerprint": "4e11b965312e97802b0fecc15b7fa4b2fb59d6c5d02946315d6fa591fb559788"
+  },
+  "scope": {
+    "description": "合成的测试数据，不是真实影片分析。",
+    "provenance": [],
+    "limitations": [
+      "相对坐标示意，非实测场地图；未确认项目保留未知。"
+    ]
+  },
+  "evidence": [
+    {
+      "id": "E1",
+      "kind": "frame",
+      "shotId": "S01",
+      "at": 0.5,
+      "text": "合成测试观察 1；不存在对应电影画面。"
+    },
+    {
+      "id": "E2",
+      "kind": "frame",
+      "shotId": "S02",
+      "at": 2.5,
+      "text": "合成测试观察 2；不存在对应电影画面。"
+    },
+    {
+      "id": "E3",
+      "kind": "frame",
+      "shotId": "S03",
+      "at": 4.5,
+      "text": "合成测试观察 3；不存在对应电影画面。"
+    }
+  ],
+  "scenes": [
+    {
+      "id": "R1",
+      "name": "合成大厅",
+      "orientation": "图上为测试舞台，图下为测试门口",
+      "scaleNote": "相对坐标；合成数据",
+      "elements": [
+        {
+          "id": "stage",
+          "label": "测试舞台",
+          "kind": "stage",
+          "box": [
+            20,
+            5,
+            60,
+            15
+          ],
+          "claim": {
+            "status": "inferred",
+            "confidence": "low",
+            "text": "合成锚点，非实测结构。",
+            "evidenceIds": [
+              "E1"
+            ],
+            "alternatives": [
+              "另一机位与裁切组合也可能成立。"
+            ]
+          },
+          "height": 3
+        }
+      ],
+      "volume": {
+        "width": 100,
+        "depth": 120,
+        "height": 30,
+        "humanHeight": 7.5,
+        "claim": {
+          "status": "proposal",
+          "confidence": "low",
+          "text": "合成三维体积，不是实际拍摄尺寸。",
+          "evidenceIds": [],
+          "alternatives": []
+        }
+      },
+      "extras": [
+        {
+          "id": "BG1",
+          "label": "合成盘坐人物",
+          "position": [
+            25,
+            55
+          ],
+          "pose": "seated",
+          "seatedStyle": "cross-legged",
+          "hairStyle": "short",
+          "seatPad": true,
+          "offerings": true,
+          "claim": {
+            "status": "proposal",
+            "confidence": "low",
+            "text": "合成测试人物与小件，不是真实演员人数。",
+            "evidenceIds": [],
+            "alternatives": []
+          }
+        }
+      ],
+      "floorTiles": 10,
+      "overview": {
+        "position": [
+          130,
+          140,
+          10
+        ],
+        "target": [
+          0,
+          4,
+          0
+        ],
+        "padding": 1.08
+      },
+      "fixtures": [
+        {
+          "id": "LC1",
+          "label": "合成顶灯组",
+          "position": [
+            50,
+            50
+          ],
+          "target": [
+            50,
+            40
+          ],
+          "role": "ambient",
+          "shape": "ceiling-panel",
+          "size": [
+            8,
+            4
+          ],
+          "elevation": 25,
+          "targetElevation": 4,
+          "claim": {
+            "status": "proposal",
+            "confidence": "low",
+            "text": "合成灯组，只测试通用造型。",
+            "evidenceIds": [],
+            "alternatives": []
+          }
+        }
+      ],
+      "annexes": [
+        {
+          "id": "annex1",
+          "label": "测试走廊",
+          "side": "entry",
+          "width": 30,
+          "depth": 20,
+          "height": 12,
+          "stairs": true,
+          "claim": {
+            "status": "proposal",
+            "confidence": "low",
+            "text": "合成走廊。",
+            "evidenceIds": [],
+            "alternatives": []
+          }
+        }
+      ]
+    }
+  ],
+  "setups": [
+    {
+      "id": "A",
+      "sceneId": "R1",
+      "label": "测试朝向",
+      "camera": {
+        "position": [
+          50,
+          80
+        ],
+        "target": [
+          50,
+          20
+        ],
+        "viewAngleDeg": 45,
+        "claim": {
+          "status": "inferred",
+          "confidence": "low",
+          "text": "合成机位 A。",
+          "evidenceIds": [
+            "E1"
+          ],
+          "alternatives": [
+            "另一机位与裁切组合也可能成立。"
+          ]
+        }
+      }
+    },
+    {
+      "id": "B",
+      "sceneId": "R1",
+      "label": "测试移动",
+      "camera": {
+        "position": [
+          30,
+          65
+        ],
+        "target": [
+          50,
+          20
+        ],
+        "viewAngleDeg": null,
+        "claim": {
+          "status": "inferred",
+          "confidence": "low",
+          "text": "合成机位 B。",
+          "evidenceIds": [
+            "E2"
+          ],
+          "alternatives": [
+            "另一机位与裁切组合也可能成立。"
+          ]
+        }
+      }
+    }
+  ],
+  "shots": [
+    {
+      "shotId": "S01",
+      "sceneId": "R1",
+      "setupId": "A",
+      "subjects": [
+        {
+          "id": "P1",
+          "label": "测试人物",
+          "position": [
+            50,
+            40
+          ],
+          "claim": {
+            "status": "inferred",
+            "confidence": "low",
+            "text": "测试人物位置。",
+            "evidenceIds": [
+              "E1"
+            ],
+            "alternatives": [
+              "另一机位与裁切组合也可能成立。"
+            ]
+          }
+        }
+      ],
+      "lighting": [
+        {
+          "id": "L1",
+          "label": "建议光源",
+          "position": [
+            10,
+            30
+          ],
+          "target": [
+            50,
+            40
+          ],
+          "role": "key",
+          "claim": {
+            "status": "proposal",
+            "confidence": "low",
+            "text": "仅供测试的复拍光源建议。",
+            "evidenceIds": [],
+            "alternatives": [
+              "另一机位与裁切组合也可能成立。"
+            ]
+          }
+        }
+      ],
+      "cameraNote": {
+        "status": "inferred",
+        "confidence": "low",
+        "text": "合成机位分析。",
+        "evidenceIds": [
+          "E1"
+        ],
+        "alternatives": [
+          "另一机位与裁切组合也可能成立。"
+        ]
+      },
+      "lens": {
+        "status": "inferred",
+        "confidence": "low",
+        "text": "视野未经真实测量。",
+        "evidenceIds": [
+          "E1"
+        ],
+        "alternatives": [
+          "另一机位与裁切组合也可能成立。"
+        ]
+      },
+      "lightNote": {
+        "status": "inferred",
+        "confidence": "low",
+        "text": "测试灯光推测。",
+        "evidenceIds": [
+          "E1"
+        ],
+        "alternatives": [
+          "另一机位与裁切组合也可能成立。"
+        ]
+      },
+      "interpretation": {
+        "status": "inferred",
+        "confidence": "low",
+        "text": "测试叙事解释。",
+        "evidenceIds": [
+          "E1"
+        ],
+        "alternatives": [
+          "另一机位与裁切组合也可能成立。"
+        ]
+      },
+      "reproduction": {
+        "status": "proposal",
+        "confidence": "low",
+        "text": "复拍建议不是现场事实。",
+        "evidenceIds": [],
+        "alternatives": [
+          "另一机位与裁切组合也可能成立。"
+        ]
+      }
+    },
+    {
+      "shotId": "S02",
+      "sceneId": "R1",
+      "setupId": "B",
+      "subjects": [
+        {
+          "id": "P1",
+          "label": "测试人物",
+          "position": [
+            50,
+            40
+          ],
+          "claim": {
+            "status": "inferred",
+            "confidence": "low",
+            "text": "测试人物位置。",
+            "evidenceIds": [
+              "E2"
+            ],
+            "alternatives": [
+              "另一机位与裁切组合也可能成立。"
+            ]
+          }
+        }
+      ],
+      "lighting": [
+        {
+          "id": "L1",
+          "label": "建议光源",
+          "position": [
+            10,
+            30
+          ],
+          "target": [
+            50,
+            40
+          ],
+          "role": "key",
+          "claim": {
+            "status": "proposal",
+            "confidence": "low",
+            "text": "仅供测试的复拍光源建议。",
+            "evidenceIds": [],
+            "alternatives": [
+              "另一机位与裁切组合也可能成立。"
+            ]
+          }
+        }
+      ],
+      "cameraNote": {
+        "status": "inferred",
+        "confidence": "low",
+        "text": "合成机位分析。",
+        "evidenceIds": [
+          "E2"
+        ],
+        "alternatives": [
+          "另一机位与裁切组合也可能成立。"
+        ]
+      },
+      "lens": {
+        "status": "inferred",
+        "confidence": "low",
+        "text": "视野未经真实测量。",
+        "evidenceIds": [
+          "E2"
+        ],
+        "alternatives": [
+          "另一机位与裁切组合也可能成立。"
+        ]
+      },
+      "lightNote": {
+        "status": "inferred",
+        "confidence": "low",
+        "text": "测试灯光推测。",
+        "evidenceIds": [
+          "E2"
+        ],
+        "alternatives": [
+          "另一机位与裁切组合也可能成立。"
+        ]
+      },
+      "interpretation": {
+        "status": "inferred",
+        "confidence": "low",
+        "text": "测试叙事解释。",
+        "evidenceIds": [
+          "E2"
+        ],
+        "alternatives": [
+          "另一机位与裁切组合也可能成立。"
+        ]
+      },
+      "reproduction": {
+        "status": "proposal",
+        "confidence": "low",
+        "text": "复拍建议不是现场事实。",
+        "evidenceIds": [],
+        "alternatives": [
+          "另一机位与裁切组合也可能成立。"
+        ]
+      },
+      "cameraMotion": {
+        "claim": {
+          "status": "inferred",
+          "confidence": "low",
+          "text": "合成轨迹，不是三维测量。",
+          "evidenceIds": [
+            "E2"
+          ],
+          "alternatives": [
+            "另一机位与裁切组合也可能成立。"
+          ]
+        },
+        "path": [
+          {
+            "at": 0,
+            "position": [
+              30,
+              65
+            ],
+            "target": [
+              50,
+              20
+            ]
+          },
+          {
+            "at": 1,
+            "position": [
+              40,
+              60
+            ],
+            "target": [
+              50,
+              20
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "shotId": "S03",
+      "sceneId": "R1",
+      "setupId": "A",
+      "subjects": [
+        {
+          "id": "P1",
+          "label": "测试人物",
+          "position": [
+            50,
+            40
+          ],
+          "claim": {
+            "status": "inferred",
+            "confidence": "low",
+            "text": "测试人物位置。",
+            "evidenceIds": [
+              "E3"
+            ],
+            "alternatives": [
+              "另一机位与裁切组合也可能成立。"
+            ]
+          }
+        }
+      ],
+      "lighting": [
+        {
+          "id": "L1",
+          "label": "建议光源",
+          "position": [
+            10,
+            30
+          ],
+          "target": [
+            50,
+            40
+          ],
+          "role": "key",
+          "claim": {
+            "status": "proposal",
+            "confidence": "low",
+            "text": "仅供测试的复拍光源建议。",
+            "evidenceIds": [],
+            "alternatives": [
+              "另一机位与裁切组合也可能成立。"
+            ]
+          }
+        }
+      ],
+      "cameraNote": {
+        "status": "inferred",
+        "confidence": "low",
+        "text": "合成机位分析。",
+        "evidenceIds": [
+          "E3"
+        ],
+        "alternatives": [
+          "另一机位与裁切组合也可能成立。"
+        ]
+      },
+      "lens": {
+        "status": "inferred",
+        "confidence": "low",
+        "text": "视野未经真实测量。",
+        "evidenceIds": [
+          "E3"
+        ],
+        "alternatives": [
+          "另一机位与裁切组合也可能成立。"
+        ]
+      },
+      "lightNote": {
+        "status": "inferred",
+        "confidence": "low",
+        "text": "测试灯光推测。",
+        "evidenceIds": [
+          "E3"
+        ],
+        "alternatives": [
+          "另一机位与裁切组合也可能成立。"
+        ]
+      },
+      "interpretation": {
+        "status": "inferred",
+        "confidence": "low",
+        "text": "测试叙事解释。",
+        "evidenceIds": [
+          "E3"
+        ],
+        "alternatives": [
+          "另一机位与裁切组合也可能成立。"
+        ]
+      },
+      "reproduction": {
+        "status": "proposal",
+        "confidence": "low",
+        "text": "复拍建议不是现场事实。",
+        "evidenceIds": [],
+        "alternatives": [
+          "另一机位与裁切组合也可能成立。"
+        ]
+      }
+    }
+  ]
+}

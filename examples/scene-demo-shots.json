@@ -1,0 +1,63 @@
+{
+  "title": "合成示例 · 仅供功能测试",
+  "source": "synthetic-local-video.mp4",
+  "meta": {
+    "durationSeconds": 6,
+    "fps": 24,
+    "width": 960,
+    "height": 540,
+    "hasAudio": false
+  },
+  "seedCuts": [
+    2,
+    4
+  ],
+  "manualCuts": [],
+  "params": {
+    "frameDir": "frames"
+  },
+  "shots": [
+    {
+      "id": "S01",
+      "start": 0,
+      "end": 2,
+      "seconds": 2,
+      "motion": 2,
+      "size": "wide",
+      "category": "subject",
+      "camera": "static",
+      "subjects": [
+        "P1"
+      ],
+      "frame": "合成测试第 1 镜：人物位于门口附近，场景锚点没有对应真实影片。"
+    },
+    {
+      "id": "S02",
+      "start": 2,
+      "end": 4,
+      "seconds": 2,
+      "motion": 2,
+      "size": "wide",
+      "category": "subject",
+      "camera": "tracking",
+      "subjects": [
+        "P1"
+      ],
+      "frame": "合成测试第 2 镜：人物位于门口附近，场景锚点没有对应真实影片。"
+    },
+    {
+      "id": "S03",
+      "start": 4,
+      "end": 6,
+      "seconds": 2,
+      "motion": 2,
+      "size": "wide",
+      "category": "subject",
+      "camera": "static",
+      "subjects": [
+        "P1"
+      ],
+      "frame": "合成测试第 3 镜：人物位于门口附近，场景锚点没有对应真实影片。"
+    }
+  ]
+}
