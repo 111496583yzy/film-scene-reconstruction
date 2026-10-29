@@ -34,6 +34,36 @@
       "text": "合成测试观察 3；不存在对应电影画面。"
     }
   ],
+  "events": [
+    {
+      "id": "EV1",
+      "label": "留意大厅",
+      "start": 0,
+      "end": 2.8,
+      "description": "人物先在入口附近停留，再把注意力转向大厅。这个合成阶段跨过第 1、2 镜，换镜不等于情节换阶段。",
+      "claim": {
+        "status": "proposal",
+        "confidence": "low",
+        "text": "仅用于验证跨镜事件条和播放联动的合成情节，不是对真实影片的观察。",
+        "evidenceIds": [],
+        "alternatives": []
+      }
+    },
+    {
+      "id": "EV2",
+      "label": "靠近回应",
+      "start": 3.2,
+      "end": 6,
+      "description": "人物靠近并作出回应。这个合成阶段跨过第 2、3 镜；前面的空档尚未划分阶段，不自动补成新事件。",
+      "claim": {
+        "status": "proposal",
+        "confidence": "low",
+        "text": "仅用于验证事件边界与片尾停留的合成情节，不代表实测动作或真实剧情。",
+        "evidenceIds": [],
+        "alternatives": []
+      }
+    }
+  ],
   "scenes": [
     {
       "id": "R1",
@@ -168,6 +198,7 @@
       "id": "A",
       "sceneId": "R1",
       "label": "测试朝向",
+      "color": "#4f8dcc",
       "camera": {
         "position": [
           50,
@@ -195,6 +226,7 @@
       "id": "B",
       "sceneId": "R1",
       "label": "测试移动",
+      "color": "#c77a48",
       "camera": {
         "position": [
           30,

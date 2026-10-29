@@ -33,6 +33,7 @@ export function initScene(shots) {
     binding: { fingerprint: fingerprint(shots) },
     scope: { description: '待填写分析范围；这是骨架，不是完成的分析', provenance: [], limitations: ['相对坐标示意，非实测场地图；未确认项目保留未知。'] },
     evidence: [],
+    events: [],
     scenes: [{ id: 'R1', name: '场景待确认', orientation: '待根据画面锚点确定方向', scaleNote: '相对坐标 0–100，无米制标定', volume: {width:100,depth:100,height:30,humanHeight:7.5,claim:{status:'proposal',confidence:'low',text:'仅作三维搭建的未标定空间骨架，不表示真实房间尺寸。',evidenceIds:[],alternatives:[]}}, extras: [], elements: [] }],
     setups: [],
     shots: array(shots.shots).map(s => ({
@@ -52,6 +53,7 @@ export function validateScene(shots, doc) {
   if (!nonempty(doc.scope?.description)) error('scope', '缺少分析范围说明');
   if (!Array.isArray(doc.scope?.provenance) || !Array.isArray(doc.scope?.limitations)) error('scope', 'provenance / limitations 必须为数组');
   for (const key of ['evidence', 'scenes', 'setups', 'shots']) if (!Array.isArray(doc[key])) error(key, '必须为数组');
+  if (doc.events !== undefined && !Array.isArray(doc.events)) error('events', '必须为数组；尚未分析叙事阶段时可省略或留空');
   const baseShots = new Map();
   let last = 0;
   const duration = shots.meta?.durationSeconds;
@@ -92,6 +94,20 @@ export function validateScene(shots, doc) {
     if ((c.status === 'observed' || c.status === 'inferred') && !c.evidenceIds.length) error(at, '观察 / 推测必须引用证据');
     if (c.status === 'observed' && c.evidenceIds.length && c.evidenceIds.every(id => evidence.get(id)?.kind === 'author')) error(at, '仅有作者标注不能证明真实片场事实；改为推测或引用原片 / 可核对资料');
     if (c.status === 'inferred' && !c.alternatives.length) warn(at, '推测尚未记录替代解释或排除依据');
+  }
+  index(doc.events, 'events');
+  let previousEvent = null;
+  for (const event of array(doc.events)) {
+    if (!event) continue;
+    const at = `events.${event.id || '?'}`;
+    if (!nonempty(event.label) || !nonempty(event.description)) error(at, '叙事阶段需要 label 与 description，不能只有标题而无事件说明');
+    if (![event.start, event.end].every(finite) || event.start < 0 || event.end <= event.start || event.end > duration) error(at, '事件 start / end 必须为片长内的有限秒数，且 start < end');
+    if (previousEvent) {
+      if (event.start < previousEvent.start) error(at, '事件必须按 start 升序排列，不能无序');
+      if (event.start < previousEvent.end) error(at, '事件阶段不能重叠；可相接或保留空档');
+    }
+    claim(event.claim, `${at}.claim`);
+    previousEvent = event;
   }
   function position(p, at) { if (p !== null && !point(p)) error(at, '坐标应为 [x,y]，范围 0–100；未知用 null'); }
   function camera(cam, at) {
@@ -171,6 +187,7 @@ export function validateScene(shots, doc) {
   }
   for (const [id, setup] of setups) {
     if (!scenes.has(setup.sceneId) || !nonempty(setup.label)) error(id, '机位组缺少合法场景 / 标签');
+    if (setup.color !== undefined && (typeof setup.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(setup.color))) error(id, '机位 color 只接受 #rrggbb 颜色');
     camera(setup.camera, id);
   }
   const covered = new Set();

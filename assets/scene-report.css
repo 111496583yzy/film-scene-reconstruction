@@ -404,8 +404,6 @@ button:not(:disabled):active,.toggle-chip:active{scale:.94;transition-duration:v
 .shot-tab img.loading{opacity:0}
 .flip-ring{position:absolute;pointer-events:none;border-radius:12px;box-shadow:0 0 0 2px var(--text);z-index:5;transform-origin:0 0;transition:transform var(--dur-snappy) var(--spring-snappy),opacity var(--d2)}
 /* 进度条 */
-.seek-progress{position:absolute;inset-inline:0;inset-block-start:50%;block-size:4px;margin-block-start:-2px;border-radius:999px;background:var(--text);transform-origin:0 50%;transform:scaleX(var(--p,0));z-index:2;pointer-events:none;transition:block-size var(--d2) var(--ease-standard),margin var(--d2) var(--ease-standard)}
-.seek-wrap:hover .seek-progress,.seek-wrap.dragging .seek-progress,.seek-wrap.keying .seek-progress{block-size:6px;margin-block-start:-3px}
 .seek-wrap input{position:relative;z-index:3}
 .playhead input::-webkit-slider-runnable-track{background:transparent!important}
 .playhead input::-webkit-slider-thumb{transition:scale var(--dur-bouncy) var(--spring-bouncy),margin var(--d2)}
@@ -433,7 +431,6 @@ button:not(:disabled):active,.toggle-chip:active{scale:.94;transition-duration:v
 @keyframes chip-tap{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--text) 35%,transparent)}100%{box-shadow:0 0 0 8px transparent}}
 }
 @media(prefers-reduced-motion:reduce){.flip-ring{transition:opacity var(--d2)}.stagger,.inspector-pane.pane-enter{animation:fade .15s both}@keyframes fade{from{opacity:0}}.sb{transition:none}}
-.seek-progress{position:absolute;inset-inline:0;inset-block-start:50%;block-size:4px;margin-block-start:-2px;border-radius:999px;background:var(--text);transform-origin:0 50%;transform:scaleX(var(--p,0));z-index:2;pointer-events:none}
 .playhead input::-webkit-slider-runnable-track{background:transparent!important}
 
 /* ===== 第三轮：右侧详情面板重做 ===== */
@@ -478,3 +475,34 @@ button:not(:disabled):active,.toggle-chip:active{scale:.94;transition-duration:v
 .analysis-section>summary>.claim-state{grid-column:3;grid-row:1}
 
 .lens-estimate-value{display:flex;flex-direction:column;gap:3px;padding:10px 12px;margin-block-start:9px;border-radius:8px;background:var(--raised)}.lens-estimate-value strong{font-size:16px;line-height:1.5;font-weight:600;font-variant-numeric:tabular-nums}.lens-estimate-value .muted{font-size:11px}.lens-actual-note{font-size:12px;line-height:1.7;color:var(--muted);margin-block-start:9px;padding-inline-start:9px;border-inline-start:2px solid var(--line)}
+
+/* Semantic annotations: camera identity is stable; selection also uses outlines and labels. */
+.annotation-tracks{display:grid;gap:5px;margin-block-end:7px}
+.annotation-row{display:grid;grid-template-columns:28px minmax(0,1fr);align-items:center;gap:8px;min-inline-size:0}
+.track-label{font-size:11px;color:var(--muted)}
+.annotation-track{position:relative;min-inline-size:0;block-size:24px;border-radius:5px;background:var(--raised)}
+.annotation-track button{position:absolute;inset-block:0;min-block-size:0;min-inline-size:0;max-inline-size:100%;padding:0 3px;border-radius:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;border-inline-end:1px solid var(--panel)}
+.event-segment{background:var(--raised);color:var(--text);box-shadow:inset 0 0 0 1px var(--line-strong)}
+#event-track .event-segment[aria-current=true],#event-track .event-segment[aria-current=true]:hover{background:var(--text);color:var(--panel);font-weight:600}
+.annotation-track button:focus-visible{outline:2px solid var(--focus);outline-offset:2px;z-index:3}
+.setup-badge,#setup-id{display:inline-flex;align-items:center;justify-content:center;border-radius:4px;padding:1px 5px;line-height:16px;font-size:10px;font-weight:600;background:var(--setup-color);color:var(--setup-ink);flex:none}
+.shot-kicker #setup-id:not(:empty){background:var(--setup-color);color:var(--setup-ink)}
+.shot-tab{border-inline-start:3px solid var(--setup-color)}
+.current-event{padding:10px 12px;margin-block:4px 12px;background:var(--raised);border-radius:10px}
+.event-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-block-end:3px}
+.current-event h3{font-size:13px;font-weight:600}
+.current-event>p{font-size:12px;line-height:1.65;margin-block-start:5px;color:var(--text)}
+.current-event .evidence-links:empty{display:none}
+@media(max-width:52rem){.annotation-row{grid-template-columns:24px minmax(0,1fr);gap:5px}.annotation-track button{font-size:10px}.current-event{padding:8px 10px}}
+
+/* Camera identity belongs to the existing video seek track, not a second navigation row. */
+.seek-camera-colors{position:absolute;inset-inline:0;inset-block-start:50%;block-size:4px;translate:0 -50%;border-radius:999px;overflow:hidden;z-index:2;pointer-events:none}
+.seek-camera-segment{position:absolute;inset-block:0;border-inline-end:1px solid var(--panel);pointer-events:none}
+.seek-wrap:hover .seek-camera-colors,.seek-wrap.dragging .seek-camera-colors,.seek-wrap.keying .seek-camera-colors{block-size:6px}
+.seek-wrap input::-webkit-slider-runnable-track{background:transparent!important}
+.seek-wrap input::-moz-range-track{background:transparent!important}
+.seek-wrap input::-moz-range-progress{background:transparent!important}
+.seek-wrap input::-webkit-slider-thumb{scale:1;inline-size:12px;block-size:12px;margin-block-start:-4px;box-shadow:0 0 0 1px var(--text),0 1px 3px rgba(0,0,0,.25)}
+.seek-wrap input::-moz-range-thumb{inline-size:12px;block-size:12px;box-shadow:0 0 0 1px var(--text),0 1px 3px rgba(0,0,0,.25)}
+.seek-wrap:hover input::-webkit-slider-thumb,.seek-wrap.dragging input::-webkit-slider-thumb,.seek-wrap.keying input::-webkit-slider-thumb{margin-block-start:-3px}
+.seek-wrap .seek-buffer,.seek-wrap:hover .seek-buffer,.seek-wrap.dragging .seek-buffer{block-size:1px;translate:0 4px;opacity:.55;z-index:1}

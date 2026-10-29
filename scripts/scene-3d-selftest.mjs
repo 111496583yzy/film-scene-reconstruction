@@ -5,6 +5,7 @@ import {dirname,join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {worldPoint,boxWorld,horizontalToVerticalFov,interpolatePose,frustumCorners,geometrySummary,interpolateSubject} from '../assets/scene-math.mjs';
 import {CAMERA_ANNOTATION,cameraAnnotationStyle} from '../assets/scene-style.mjs';
+import ReportModel from '../assets/ui-state.cjs';
 import {validateScene,renderReport,initScene} from './scene-report.mjs';
 const root=join(dirname(fileURLToPath(import.meta.url)),'..');
 const shots=JSON.parse(readFileSync(join(root,'examples/scene-demo-shots.json'),'utf8'));
@@ -21,8 +22,79 @@ function colorLuminance(hex){const v=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16
 function colorContrast(a,b){const v=[colorLuminance(a),colorLuminance(b)].sort((x,y)=>x-y);return(v[1]+.05)/(v[0]+.05);}
 test('declared camera label pair retains readable contrast',()=>{const s=cameraAnnotationStyle();assert.ok(colorContrast(s.labelText,s.color)>=4.5);});
 test('default camera annotation separates from declared neutral floor and dark backdrop',()=>{const s=cameraAnnotationStyle();for(const bg of ['#cac3b4','#0a0a0a'])assert.ok(colorContrast(s.color,bg)>=3);});
-test('both theme legends and renderer fallback resolve to the same camera role',()=>{const css=readFileSync(join(root,'assets/scene-report.css'),'utf8'),tokens=[...css.matchAll(/--camera:(#[0-9a-f]{6});/gi)].map(m=>m[1]);assert.equal(tokens.length,2);for(const token of tokens)assert.equal(cameraAnnotationStyle(token).color,CAMERA_ANNOTATION.fallbackColor);});
 const volume={width:100,depth:140,height:30,humanHeight:7.5};
+// Exercise the shipped renderer functions with lightweight display objects. These
+// tests cover color/geometry orchestration, not WebGL rendering or visual QA.
+const rendererSource=readFileSync(join(root,'assets/scene3d-source.mjs'),'utf8');
+function rendererFunction(start,end,name,environment){
+  const from=rendererSource.indexOf(start),to=rendererSource.indexOf(end,from);
+  assert.ok(from>=0&&to>from,`renderer function ${name} is available`);
+  const body=rendererSource.slice(from,to).replace(/^ ([a-zA-Z]+)\(/,'function $1(');
+  return Function(...Object.keys(environment),`${body};return ${name};`)(...Object.values(environment));
+}
+function displayHarness({others=false}={}){
+  const rigs=[],lines=[],labels=[],legs=[],meshes=[];
+  class Color{constructor(value){this.value=value?.value??value;}copy(value){this.value=value?.value??value;return this;}}
+  class Vector3{constructor(x=0,y=0,z=0){Object.assign(this,{x,y,z});}distanceTo(b){return Math.hypot(this.x-b.x,this.y-b.y,this.z-b.z);}}
+  class Group{
+    constructor(){this.children=[];this.position={copy:p=>this.location=p};}
+    add(...objects){this.children.push(...objects);}lookAt(){}rotateY(){}
+    traverse(fn){fn(this);for(const child of this.children)child.traverse?child.traverse(fn):fn(child);}
+    clear(){this.children=[];}
+  }
+  class Geometry{constructor(...values){this.values=values;}setAttribute(name,value){this[name]=value;}computeVertexNormals(){}}
+  class SphereGeometry extends Geometry{}
+  const material=(color,extra={})=>({color:new Color(color),emissive:new Color(extra.emissive??0),...extra,clone(){return material(this.color,{...extra});}});
+  const mesh=(geometry,mat,parent,position)=>{const o={geometry,material:mat,position,rotation:{}};parent.add(o);meshes.push(o);return o;};
+  const THREE={Color,Group,Vector3,SphereGeometry,BoxGeometry:Geometry,CylinderGeometry:Geometry,BufferGeometry:Geometry,Float32BufferAttribute:Geometry,DoubleSide:2,Plane:class{constructor(normal,constant){Object.assign(this,{normal,constant});}},MeshBasicMaterial:class{constructor(options){Object.assign(this,options);}},Mesh:class{constructor(geometry,mat){Object.assign(this,{geometry,material:mat});}}};
+  const env={THREE,CAMERA_ANNOTATION,worldPoint,frustumCorners,V:p=>new Vector3(...p),material,mesh,
+    beam(parent,a,b,r,color){const o=mesh(new Geometry(r,r),material(color),parent);legs.push({a,b,r,color,o});return o;},
+    line(parent,points,color,opacity,dashed){const o={material:{color,opacity},points};lines.push({points,color,opacity,dashed,o});parent.add(o);return o;}};
+  const makeRig=rendererFunction('function makeRig(', '\nfunction drawFrustum(', 'makeRig',env);
+  const drawFrustum=rendererFunction('function drawFrustum(', '\nfunction lightRig(', 'drawFrustum',env);
+  const drawDynamic=rendererFunction(' drawDynamic(){', '\n setOptions(', 'drawDynamic',{
+    ...env,ReportModel,cameraAnnotationStyle,interpolatePose,interpolateSubject,
+    disposeGroup:g=>{g.clear();for(const list of [rigs,lines,labels,legs,meshes])list.length=0;},mannequin(){},lightRig(){},asColor:v=>v,
+    makeRig(parent,cam,vol,color,opacity=1){const result=makeRig(parent,cam,vol,color,opacity);rigs.push({cam,color,opacity,result});return result;},
+    drawFrustum,
+    makeLabel(name,text,options={}){const label={name,text,options,material:{},position:{set(...p){label.location=p;}}};labels.push(label);return label;},
+  });
+  const viewer={vol:volume,sceneData:{},scene:{background:{set(){}}},dynamicGroup:new Group(),showLights:false,showOthers:others,aspect:2,progress:0,mode:'overview',container:{dataset:{}},camSnap(){return null;},render(){},fadeLabels(){},tweenFrom(){},applyShotView(){}};
+  viewer.drawDynamic=drawDynamic;
+  viewer.setShot=rendererFunction(' setShot(', '\n drawDynamic(', 'setShot',{});
+  viewer.setOptions=rendererFunction(' setOptions(', '\n setTheme(', 'setOptions',{});
+  viewer.setTheme=rendererFunction(' setTheme(', '\n setMode(', 'setTheme',{});
+  return{viewer,drawDynamic,makeRig,drawFrustum,Group,Color,rigs,lines,labels,legs,meshes,get markers(){return meshes.filter(m=>m.geometry instanceof SphereGeometry);}};
+}
+const cameraSetups=[
+  {id:'A',label:'左侧',sceneId:'R1',color:'#e2ac45',camera:{position:[20,35],target:[50,60],elevation:6,viewAngleDeg:60}},
+  {id:'B',label:'右侧',sceneId:'R1',color:'#865ce6',camera:{position:[80,35],target:[50,60],elevation:6,viewAngleDeg:50}},
+  {id:'unknown',sceneId:'R1',color:'#6c9bcc',camera:{position:null,target:null,viewAngleDeg:null}},
+  {id:'elsewhere',sceneId:'R2',color:'#ce6c88',camera:{position:[40,40],target:[50,60],elevation:6,viewAngleDeg:60}},
+];
+function drawSetup(h,index=0,setups=cameraSetups){h.viewer.setShot({shotId:`S${index}`,setupId:setups[index].id,sceneId:setups[index].sceneId,subjects:[]},setups[index],setups,2,0);return h;}
+const rigAt=(h,setup)=>h.rigs.find(r=>JSON.stringify(r.cam.position)===JSON.stringify(setup.camera.position));
+const markerAt=(h,setup)=>h.markers.find(m=>JSON.stringify(m.position)===JSON.stringify(worldPoint(setup.camera.position,setup.camera.elevation??volume.humanHeight*.78,volume)));
+const annotationColor=(h,setup)=>rigAt(h,setup)?.color.value??markerAt(h,setup)?.material.color.value;
+test('renderer uses the report model as its only setup color source',()=>{assert.match(rendererSource,/import ReportModel from '\.\/ui-state\.cjs'/);assert.ok(!rendererSource.includes("getPropertyValue('--camera')"));});
+test('constructor and default display keep candidate comparison disabled',()=>{const constructor=rendererSource.slice(rendererSource.indexOf(' constructor('),rendererSource.indexOf('\n setScene('));assert.match(constructor,/this\.showOthers=false/);const h=drawSetup(displayHarness());assert.equal(h.viewer.showOthers,false);assert.equal(h.rigs.length,1);assert.equal(h.labels.length,1);assert.equal(h.markers.length,0);assert.equal(h.viewer.otherRigs.children.length,0);assert.equal(h.lines.length,7);});
+test('the current camera body and tripod retain its setup color',()=>{const h=drawSetup(displayHarness()),active=h.rigs[0];assert.equal(active.color.value,cameraSetups[0].color);assert.equal(active.opacity,1);for(const body of active.result.group.children.slice(0,2)){assert.equal(body.material.color.value,cameraSetups[0].color);assert.equal(body.material.opacity,1);}for(const leg of h.legs)assert.equal(leg.o.material.color.value,cameraSetups[0].color);});
+test('comparison opt-in adds only a colored sphere and ID for each known same-scene candidate',()=>{const h=drawSetup(displayHarness({others:true})),marker=markerAt(h,cameraSetups[1]);assert.equal(h.rigs.length,1);assert.equal(h.legs.length,3);assert.equal(h.markers.length,1);assert.ok(marker);assert.deepEqual(marker.geometry.values,[.6,10,8]);assert.equal(marker.material.color.value,cameraSetups[1].color);assert.equal(marker.material.opacity,.55);assert.equal(marker.material.transparent,true);assert.deepEqual(marker.position,worldPoint(cameraSetups[1].camera.position,6,volume));assert.ok(h.labels.some(l=>l.name==='B'));assert.ok(!h.labels.some(l=>/unknown|elsewhere/.test(l.name)));});
+test('comparison never draws a non-current frustum, fill or targeting line',()=>{const h=drawSetup(displayHarness({others:true}));assert.equal(h.lines.length,7);assert.ok(h.lines.every(l=>l.color.value===cameraSetups[0].color));const meshes=[];h.viewer.otherRigs.traverse(o=>{if(o.geometry)meshes.push(o);});assert.equal(meshes.length,1);assert.equal(meshes[0],h.markers[0]);assert.equal(h.viewer.activeRig.children.filter(o=>o.geometry?.position).length,1);});
+test('turning comparison on and off changes markers only and clears all candidate objects',()=>{const h=drawSetup(displayHarness()),pos=h.rigs[0].result.pos;h.viewer.setOptions({lights:false,others:true});assert.equal(h.markers.length,1);assert.equal(h.labels.length,2);assert.equal(h.rigs.length,1);assert.equal(h.lines.length,7);assert.equal(h.viewer.container.dataset.cameraDisplay,'comparison');assert.deepEqual(JSON.parse(h.viewer.container.dataset.comparisonSetups),['B']);h.viewer.setOptions({lights:false,others:false});assert.equal(h.markers.length,0);assert.equal(h.labels.length,1);assert.equal(h.viewer.otherRigs.children.length,0);assert.equal(h.rigs.length,1);assert.equal(h.lines.length,7);assert.equal(h.viewer.container.dataset.cameraDisplay,'current-only');assert.deepEqual(JSON.parse(h.viewer.container.dataset.comparisonSetups),[]);assert.deepEqual(h.rigs[0].result.pos,pos);});
+test('switching the active shot preserves colors between a marker and the current rig',()=>{const a=drawSetup(displayHarness({others:true}),0),b=drawSetup(displayHarness({others:true}),1);for(const setup of cameraSetups.slice(0,2))assert.equal(annotationColor(a,setup),annotationColor(b,setup));});
+test('theme changes preserve identity colors and the user comparison choice',()=>{for(const others of [false,true]){const h=drawSetup(displayHarness({others})),before=h.labels.map(l=>[l.text,l.options.background]);h.viewer.setTheme('light');assert.equal(h.viewer.showOthers,others);assert.deepEqual(h.labels.map(l=>[l.text,l.options.background]),before);h.viewer.setTheme('dark');assert.equal(h.viewer.showOthers,others);assert.deepEqual(h.labels.map(l=>[l.text,l.options.background]),before);}});
+test('shot and within-shot updates never automatically enable comparison',()=>{const h=drawSetup(displayHarness());drawSetup(h,1);assert.equal(h.viewer.showOthers,false);assert.equal(h.markers.length,0);h.viewer.setShot({...h.viewer.note},h.viewer.setup,cameraSetups,2,.5);assert.equal(h.viewer.showOthers,false);assert.equal(h.markers.length,0);h.viewer.setOptions({lights:false,others:true});drawSetup(h,0);assert.equal(h.viewer.showOthers,true);assert.equal(h.markers.length,1);});
+test('every current or candidate label gets contrast text from the shared color model',()=>{for(const h of [drawSetup(displayHarness({others:true}),0),drawSetup(displayHarness({others:true}),1)])for(const label of h.labels){assert.equal(label.text,ReportModel.colorText(label.options.background));assert.ok(colorContrast(label.text,label.options.background)>=4.5);}});
+test('current camera is a full rig with a larger label, candidates are only small markers',()=>{const h=drawSetup(displayHarness({others:true}));assert.ok(h.labels.find(l=>l.name.startsWith('A ·')).options.height>h.labels.find(l=>l.name==='B').options.height);assert.equal(h.rigs.length,1);assert.equal(h.legs.length,3);assert.equal(h.markers.length,1);});
+test('an unknown current position draws no camera equipment or labels by default',()=>{const h=drawSetup(displayHarness(),2);assert.equal(h.viewer.activeRig,null);assert.equal(h.rigs.length,0);assert.equal(h.legs.length,0);assert.equal(h.lines.length,0);assert.equal(h.markers.length,0);assert.equal(h.labels.length,0);});
+test('comparison with an unknown current camera still adds no equipment or unknown marker',()=>{const h=drawSetup(displayHarness({others:true}),2);assert.equal(h.viewer.activeRig,null);assert.equal(h.rigs.length,0);assert.equal(h.legs.length,0);assert.equal(h.lines.length,0);assert.equal(h.markers.length,2);assert.ok(h.labels.every(l=>l.name==='A'||l.name==='B'));});
+test('other-scene candidates never appear in comparison',()=>{const h=drawSetup(displayHarness({others:true}));assert.equal(markerAt(h,cameraSetups[3]),undefined);assert.ok(!h.labels.some(l=>l.name==='elsewhere'));});
+test('single uncolored rehearsal setup keeps the shared blue fallback',()=>{const setup={...cameraSetups[0]};delete setup.color;const h=drawSetup(displayHarness(),0,[setup]);assert.equal(h.rigs[0].color.value,'#4c8dff');assert.equal(h.rigs[0].color.value,ReportModel.setupColor(setup,[]));});
+test('uncolored multi-setup markers keep identity colors after reordering',()=>{const setups=cameraSetups.slice(0,2).map(({color,...s})=>s),a=drawSetup(displayHarness({others:true}),0,setups),b=drawSetup(displayHarness({others:true}),0,[...setups].reverse());for(const setup of setups){assert.equal(annotationColor(a,setup),ReportModel.setupColor(setup,setups));assert.equal(annotationColor(a,setup),annotationColor(b,setup));}});
+test('a current unmeasured angle draws no frustum even if a candidate angle is known',()=>{const setups=cameraSetups.slice(0,2).map((s,i)=>({...s,camera:{...s.camera,viewAngleDeg:i?50:null}})),h=drawSetup(displayHarness({others:true}),0,setups);assert.equal(h.lines.length,0);assert.equal(h.rigs.length,1);assert.equal(h.markers.length,1);assert.equal(h.viewer.activeRig.children.filter(o=>o.geometry?.position).length,0);});
+test('a known setup is restored after visiting an unknown camera position',()=>{const h=drawSetup(displayHarness());assert.ok(h.viewer.activeRig);drawSetup(h,2);assert.equal(h.viewer.activeRig,null);drawSetup(h,1);assert.ok(h.viewer.activeRig);assert.deepEqual(h.viewer.pose.position,cameraSetups[1].camera.position);assert.equal(h.rigs.at(-1).color.value,cameraSetups[1].color);});
+test('comparison styling does not change camera geometry or source facts',()=>{const before=structuredClone(cameraSetups),a=drawSetup(displayHarness(),0),b=drawSetup(displayHarness({others:true}),0);assert.deepEqual(rigAt(a,cameraSetups[0]).result.pos,rigAt(b,cameraSetups[0]).result.pos);assert.deepEqual(rigAt(a,cameraSetups[0]).result.target,rigAt(b,cameraSetups[0]).result.target);assert.deepEqual(a.lines.map(l=>l.points),b.lines.map(l=>l.points));drawSetup(b,1);b.viewer.setTheme('light');b.viewer.setOptions({lights:false,others:false});assert.deepEqual(cameraSetups,before);});
 test('center is a real XYZ position with elevation',()=>assert.deepEqual(worldPoint([50,50],6,volume),[0,6,0]));
 test('horizontal depth maps to Z, not a 2D skew',()=>assert.deepEqual(worldPoint([100,100],12,volume),[50,12,70]));
 test('unknown position remains absent',()=>assert.equal(worldPoint(null,0,volume),null));
