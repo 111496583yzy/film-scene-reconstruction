@@ -88,7 +88,7 @@ try{viewer=new window.FilmScene3D.SceneViewer3D($('stage-3d'),{onError:error=>{$
 setTheme(initialTheme,{save:false});setTab('analysis',{animate:false});setActive(0);updateProgress(0);playState();if(D.video)V.src=D.video;else{mediaError=true;document.querySelector('.source-panel').dataset.error='true';$('source-empty').hidden=false;text('video-status','选择本地视频以播放原片');playState();}
 const dockObserver=new ResizeObserver(()=>root.style.setProperty('--dock-height',$('timeline').closest('.playback-dock').offsetHeight+'px'));dockObserver.observe(document.querySelector('.playback-dock'));
 window.addEventListener('pagehide',()=>{if(blobUrl)URL.revokeObjectURL(blobUrl);viewer?.dispose();dockObserver.disconnect();clearTimeout(toastTimer);});
-window.FilmReportUI=Object.freeze({getState:()=>({activeShot:shots[active]?.id,time:currentTime(),tab,view:viewer?.mode||'unavailable',paused:V.paused,focused:app.classList.contains('scene-focused'),theme:root.dataset.theme})});
+window.FilmReportUI=Object.freeze({setTheme,pause:()=>V.pause(),getState:()=>({activeShot:shots[active]?.id,time:currentTime(),tab,view:viewer?.mode||'unavailable',paused:V.paused,focused:app.classList.contains('scene-focused'),theme:root.dataset.theme})});
 
 // 新手引导小条：先选镜头 → 看机位 → 看证据；关闭后记住（localStorage 不可用时仅本次隐藏）。
 (()=>{const guide=$('guide');let dismissed=false;try{dismissed=localStorage.getItem('film-scene-guide')==='done';}catch{}guide.hidden=dismissed;

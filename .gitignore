@@ -52,3 +52,8 @@ request-status.json
 geometry-review.json
 validation.json
 validation-*.json
+
+# Local rehearsal projects and exports
+/rehearsal.html
+/rehearsal-project.json
+*.rehearsal.json

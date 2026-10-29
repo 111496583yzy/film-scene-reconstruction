@@ -1,6 +1,6 @@
 ---
 name: film-scene-reconstruction
-description: 根据电影或视频片段做摄影拉片与拍摄现场推演：拆镜头、关联重复机位、重建场景关系、分析镜头视野与灯光证据，输出可旋转的真实三维片场与原片同步的机位灯位报告。适用于电影机位分析、灯光反推、摄影调度拆解、拍摄现场还原；不把推测当剧组资料，不自动生成复刻影片。
+description: 根据电影或视频片段做摄影拉片与拍摄现场推演：拆镜头、关联重复机位、重建场景关系、分析镜头视野与灯光证据，输出可旋转的真实三维片场与原片同步的机位灯位报告。适用于电影机位分析、灯光反推、摄影调度拆解、拍摄现场还原，也支持从拉片或空白场景新建人物走位与机位排戏预演；不把推测当剧组资料，不自动生成复刻影片。
 ---
 
 # 电影机位与灯光推演
@@ -93,6 +93,18 @@ node {baseDir}/scripts/scene-report.mjs render shots.json scene.json --out scene
 
 交付：`shots.json`、`track.json`、`scene.json`、`scene-report.html`、关键帧；一句话说明范围、镜数、机位组数、可打开路径、主要不确定性。对最终用户讲“可旋转的三维片场、摄影机位置和灯光”，不要倾倒 schema 名词。交付至少带一张能看清体积的实测截图，不能只改文案就声称完成三维化。
 
+## 用户要求排戏或编排自己的镜头时
+
+先读 [rehearsal.md](references/rehearsal.md)。默认分析流程仍生成只读报告；只有用户明确要求编排、走位或排戏时，才创建独立的可编辑方案，不覆盖原分析、证据或机器底稿。
+
+- 新报告顶部「排我的戏」可从当前镜头复制；排戏页内可复制整段、新建空白/示例、打开已保存工程。
+- 无原视频时：`node {baseDir}/scripts/rehearsal.mjs new --out <排戏.html>`。
+- 已有底稿时：`node {baseDir}/scripts/rehearsal.mjs from-report shots.json scene.json --all --out <排戏.html>`；也可用 `--shot S01` 只复制一镜。输入仍需通过原报告的绑定校验。
+- 导入原有多点运动路线时先保留其节点；用户重新摆起终点后，该对象按新的起终点预演。不是从视频测出的新运动。
+- 照片只是参考；人物替身、场景体块和取景角度是用户的方案，不升级为原片事实。不自动上传/生成，不宣称照片已重建成三维。
+- 保存 JSON 工程并实际重开；本机缓存仅作恢复，不承诺跨浏览器/临时端口/清理缓存后仍存在。可导出独立可播放 HTML、当前机位分镜 PNG 和俯视走位 PNG。
+- 验收需实际拖人/摄影机、播放起终点、撤销/重做、保存再导入、无效导入保持原工程、导出后独立打开、原报告不被修改，以及深浅主题/浅色文字选区。未做的检查明确列出。
+
 ## 可选原视频模型复核
 
 用户明确提供模型接入并授权当前素材外部分析时，先读 [video-model-analysis.md](references/video-model-analysis.md)，用本目录 `video_model_enrich.py`。先核实网关原始视频输入，不把图片能力当成视频支持。先dry-run，再一次受限调用；失败不自动重试、不抽帧降级。配置只在本机受保护文件中，不能塞进本Skill或报告。
@@ -108,6 +120,7 @@ node {baseDir}/scripts/selftest.mjs
 node {baseDir}/scripts/scene-selftest.mjs
 node {baseDir}/scripts/scene-3d-selftest.mjs
 node {baseDir}/scripts/ui-selftest.mjs
+node {baseDir}/scripts/rehearsal-selftest.mjs
 python3 {baseDir}/scripts/test_qwen_omni_enrich.py
 python3 {baseDir}/scripts/test_video_model_enrich.py
 ```

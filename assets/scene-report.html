@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="zh-CN" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title><!--REPORT_TITLE--></title><style>/*REPORT_STYLE*/</style></head>
+<html lang="zh-CN" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title><!--REPORT_TITLE--></title><style id="report-style">/*REPORT_STYLE*/</style><style id="rehearsal-style">/*REPORT_REHEARSAL_STYLE*/</style></head>
 <body>
 <a class="skip-link" href="#workbench">跳到拉片工作区</a>
 <div id="app" class="app-shell">
 <header class="app-header">
   <div class="app-identity"><span class="app-mark" data-icon="film" aria-hidden="true"></span><div class="document-heading"><h1 id="title"></h1><p id="document-meta" class="muted"></p></div></div>
-  <div class="header-actions"><button id="about-open" class="quiet-button inference-label" type="button" title="查看范围、依据与未确认事项"><span data-icon="info" aria-hidden="true"></span><span>推演示意</span></button><span class="header-separator"></span><button id="help-open" class="icon-button" type="button" aria-label="查看操作帮助" title="操作帮助（?）"><span data-icon="circle-help" aria-hidden="true"></span></button><button id="theme" class="icon-button" type="button" aria-label="切换到深色模式" title="切换明暗模式"><span class="icon-swap"><span class="theme-sun" data-icon="sun" aria-hidden="true"></span><span class="theme-moon" data-icon="moon" aria-hidden="true"></span></span></button><button id="toggle-inspector" class="icon-button" type="button" aria-label="收起分析侧栏" aria-expanded="true" aria-controls="inspector" title="收起分析侧栏"><span data-icon="panel-right-close" aria-hidden="true"></span></button></div>
+  <div class="header-actions"><button id="open-rehearsal" class="quiet-button" type="button" title="复制当前镜头为自己的排戏方案，不改原片分析"><span data-icon="camera" aria-hidden="true"></span><span>排我的戏</span></button><button id="about-open" class="quiet-button inference-label" type="button" title="查看范围、依据与未确认事项"><span data-icon="info" aria-hidden="true"></span><span>推演示意</span></button><span class="header-separator"></span><button id="help-open" class="icon-button" type="button" aria-label="查看操作帮助" title="操作帮助（?）"><span data-icon="circle-help" aria-hidden="true"></span></button><button id="theme" class="icon-button" type="button" aria-label="切换到深色模式" title="切换明暗模式"><span class="icon-swap"><span class="theme-sun" data-icon="sun" aria-hidden="true"></span><span class="theme-moon" data-icon="moon" aria-hidden="true"></span></span></button><button id="toggle-inspector" class="icon-button" type="button" aria-label="收起分析侧栏" aria-expanded="true" aria-controls="inspector" title="收起分析侧栏"><span data-icon="panel-right-close" aria-hidden="true"></span></button></div>
 </header>
 <main id="workbench" class="workbench" tabindex="-1">
   <section id="visual-workspace" class="visual-workspace" aria-label="原片与三维对照">
@@ -38,6 +38,8 @@
 <div id="status-announcement" class="sr-only" role="status" aria-live="polite"></div><div id="toast" class="toast" role="status" hidden><span data-icon="check" aria-hidden="true"></span><span id="toast-text"></span></div>
 </div>
 <dialog id="help-dialog" aria-labelledby="help-title"><div class="dialog-heading"><h2 id="help-title">先选镜头，再看机位</h2><button id="help-close" class="icon-button" type="button" aria-label="关闭帮助"><span data-icon="x" aria-hidden="true"></span></button></div><ol class="help-steps"><li><strong>点播放或底部镜头</strong><span>原片、三维与右侧分析会一起切换。</span></li><li><strong>切到「机位视角」</strong><span>从摄影机的位置查看人物与场景关系。</span></li><li><strong>打开「证据」</strong><span>点时间回看依据，不必在页面里来回寻找。</span></li></ol><div class="keyboard-help"><span data-icon="keyboard" aria-hidden="true"></span><kbd>空格</kbd>播放 / 暂停<kbd>← →</kbd>上一镜 / 下一镜<kbd>Esc</kbd>返回对照</div></dialog>
-<script type="application/json" id="report-data">/*REPORT_DATA*/</script><script>/*REPORT_MODEL*/</script><script>/*REPORT_3D*/</script><script>/*REPORT_SCRIPT*/</script>
+<!--REPORT_REHEARSAL_TEMPLATE-->
+<script type="application/json" id="report-data">/*REPORT_DATA*/</script><script>/*REPORT_MODEL*/</script><script id="report-3d">/*REPORT_3D*/</script><script>/*REPORT_SCRIPT*/</script>
+<script id="rehearsal-model">/*REPORT_REHEARSAL_MODEL*/</script><script id="rehearsal-license" type="text/plain">/*REPORT_REHEARSAL_LICENSE*/</script><script id="rehearsal-controller">/*REPORT_REHEARSAL_SCRIPT*/</script>
 <!--REPORT_LICENSE-->
 </body></html>

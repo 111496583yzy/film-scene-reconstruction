@@ -42,6 +42,33 @@
 
 报告里的“载入原片”只用于恢复播放，不会自动分析新视频。新视频需要重新交给 Codex。
 
+## 排戏模式：把分析变成自己的方案
+
+在新生成的报告顶部点 **「排我的戏」**，可复制当前镜头为独立方案；原片分析、证据和切点保持只读。也可以不提供视频，直接新建排戏页：
+
+```bash
+node scripts/rehearsal.mjs new --out reports/rehearsal.html
+node scripts/rehearsal.mjs demo --out reports/rehearsal-demo.html
+```
+
+- 拖人物、拖蓝色摄影机；旋转空白区域只是观察，不会改变拍摄机位。
+- 设置起点、终点和镜头用时，一边摆位，一边看右侧真实机位画面，播放走位与运镜预演。
+- 名称、颜色、造型参考是人物的全工程资料；站位和摄影机只改当前镜头。布景默认也只改当前镜，共用场景会按需复制。
+- 可以复用已有角色、添加门窗桌椅、切换/新建场景、复制与调整镜头顺序；支持撤销、重做和拖拽取消。
+- 「保存工程」下载 JSON，之后用「打开工程」继续修改；「导出可播放页面」可在没有原片的情况下独立打开。还可导出当前机位的分镜图和俯视走位图。
+- 参考图保存在工程里，只作人物/场景对照，不会自动变成三维模型。本机草稿只是恢复缓存，不替代工程文件；浏览器不允许缓存时会明确提示。
+
+从已有文件新建排戏页：
+
+```bash
+node scripts/rehearsal.mjs from-report shots.json scene.json --shot S01 --out reports/rehearsal.html
+node scripts/rehearsal.mjs from-report shots.json scene.json --all --out reports/rehearsal-all.html
+node scripts/rehearsal.mjs validate my-project.json
+node scripts/rehearsal.mjs render my-project.json --out reports/reopened.html
+```
+
+首期是相对坐标的排戏替身与镜头预演，不是精细骨骼动画、照片三维重建或物理布光仿真；不自动调用 AI 生成模型。导入的多点路线会先保留，重新摆起终点后按新起终点预演。详细边界与验收见 [排戏模式](references/rehearsal.md)。
+
 ## 依赖与离线运行
 
 基础流程需要 Node.js 18+、ffmpeg、ffprobe；可选模型复核需要 Python 3（标准库即可）。正常使用不需要 `npm install`。Three.js 和 Lucide 图标已内嵌在独立资产中，不依赖运行时 CDN。
@@ -76,6 +103,7 @@ node scripts/selftest.mjs
 node scripts/scene-selftest.mjs
 node scripts/scene-3d-selftest.mjs
 node scripts/ui-selftest.mjs
+node scripts/rehearsal-selftest.mjs
 python3 scripts/test_qwen_omni_enrich.py
 python3 scripts/test_video_model_enrich.py
 ```

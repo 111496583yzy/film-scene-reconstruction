@@ -1,3 +1,4 @@
+import {installSceneEditing} from './scene-editor3d.mjs';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import {worldPoint,boxWorld,horizontalToVerticalFov,interpolatePose,interpolateSubject,frustumCorners,geometrySummary} from './scene-math.mjs';
@@ -118,7 +119,7 @@ function outdoorElement(g,e,b,h,color){
 
 function addElement(parent,e,vol,cutWalls,onReady){
   const b=boxWorld(e.box,vol),y=e.elevation??0,h=e.height??(e.kind==='zone'?.12:1),color=asColor(e.color,e.kind==='stage'?COLORS.carpet:COLORS.wall);
-  const g=new THREE.Group();g.position.set(b.center[0],y,b.center[2]);g.userData.kind=e.kind;if(e.cutaway)g.visible=false;parent.add(g);
+  const g=new THREE.Group();g.position.set(b.center[0],y,b.center[2]);g.userData.kind=e.kind;g.userData.elementId=e.id;if(e.cutaway)g.visible=false;parent.add(g);
   if(e.kind==='furniture'&&outdoorElement(g,e,b,h,color))return g;
   if(e.kind==='zone'){const o=box(g,[b.width,.1,b.depth],[0,.02,0],color);o.receiveShadow=true;return g;}
   if(e.kind==='curtain'){
@@ -246,7 +247,7 @@ export class SceneViewer3D{
   disposeGroup(this.dynamicGroup);if(!this.note||!this.vol)return;
   // Use the same semantic token as the legend, independent of scene materials.
   const v=this.vol,style=cameraAnnotationStyle(getComputedStyle(this.container).getPropertyValue('--camera')),color=new THREE.Color(style.color);
-  for(const rawWho of this.note.subjects||[]){const who=interpolateSubject(rawWho,this.progress);mannequin(this.dynamicGroup,who,v,true);if(who.marker&&who.position){const at=worldPoint(who.position,(who.elevation??0)+.14,v);mesh(new THREE.CylinderGeometry(2.1,2.1,.13,28),new THREE.MeshBasicMaterial({color:asColor(who.marker,0xe46f58),transparent:true,opacity:.75}),this.dynamicGroup,at,false);}if(who.position){const at=worldPoint(who.position,(who.elevation??0)+(who.modelHeight??v.humanHeight)+(who.pose==='seated'?-2:0)+2,v),label=makeLabel(who.label);label.position.set(...at);this.dynamicGroup.add(label);}}
+  for(const rawWho of this.note.subjects||[]){const who=interpolateSubject(rawWho,this.progress);mannequin(this.dynamicGroup,who,v,true);if(who.marker&&who.position){const at=worldPoint(who.position,(who.elevation??0)+.14,v);mesh(new THREE.CylinderGeometry(2.1,2.1,.13,28),new THREE.MeshBasicMaterial({color:asColor(who.marker,0xe46f58),transparent:true,opacity:.75}),this.dynamicGroup,at,false);}if(who.position){const at=worldPoint(who.position,(who.elevation??0)+(who.modelHeight??v.humanHeight)+(who.pose==='seated'?-2:0)+2,v),label=makeLabel(who.label);label.userData.editorActorId=who.id;label.position.set(...at);this.dynamicGroup.add(label);}}
   if(this.showLights)for(const l of [...(this.sceneData.fixtures||[]),...(this.note.lighting||[])])lightRig(this.dynamicGroup,l,v);
   this.otherRigs=new THREE.Group();this.dynamicGroup.add(this.otherRigs);if(this.showOthers)for(const s of this.allSetups||[])if(s.sceneId===this.note.sceneId&&s.id!==this.note.setupId){makeRig(this.otherRigs,s.camera,v,0x8095a3,.35);if(s.camera.position){const p=worldPoint(s.camera.position,(s.camera.elevation??v.humanHeight*.8)+3,v),label=makeLabel(s.id,'#1c1c1e',{background:'rgba(210,210,214,.95)',height:17});label.position.set(...p);this.otherRigs.add(label);}}
   this.pose=this.setup?interpolatePose(this.setup.camera,this.note.cameraMotion?.path,this.progress):null;
@@ -319,4 +320,5 @@ export class SceneViewer3D{
  }
  dispose(){this.resizeObserver.disconnect();this.controls.dispose();disposeGroup(this.staticGroup);disposeGroup(this.dynamicGroup);this.renderer.dispose();this.renderer.domElement.remove();}
 }
+installSceneEditing(SceneViewer3D,THREE);
 window.FilmScene3D={SceneViewer3D,revision:THREE.REVISION};

@@ -265,9 +265,14 @@ export function renderReport(shots, scene, {baseDir=process.cwd(), outDir=baseDi
     '<!--REPORT_LICENSE-->':'<!-- Lucide icon license\n'+readFileSync(join(HERE,'../assets/vendor/lucide/LICENSE.txt'),'utf8').replace(/--/g,'—')+'\n-->',
     '/*REPORT_3D*/':readFileSync(join(HERE,'../assets/vendor/scene3d.bundle.js'),'utf8'),
     '/*REPORT_SCRIPT*/':readFileSync(join(HERE,'../assets/scene-report.js'),'utf8'),
+    '/*REPORT_REHEARSAL_STYLE*/':readFileSync(join(HERE,'../assets/rehearsal/editor.css'),'utf8'),
+    '<!--REPORT_REHEARSAL_TEMPLATE-->':readFileSync(join(HERE,'../assets/rehearsal/editor.html'),'utf8'),
+    '/*REPORT_REHEARSAL_MODEL*/':readFileSync(join(HERE,'../assets/rehearsal/project.cjs'),'utf8'),
+    '/*REPORT_REHEARSAL_LICENSE*/':readFileSync(join(HERE,'../assets/vendor/THREE-LICENSE.txt'),'utf8').replace(/</g,'&lt;'),
+    '/*REPORT_REHEARSAL_SCRIPT*/':readFileSync(join(HERE,'../assets/rehearsal/controller.js'),'utf8'),
   };
   // A single template pass: annotation text cannot be reinterpreted as a later placeholder.
-  return html.replace(/<!--REPORT_(?:TITLE|LICENSE)-->|\/\*REPORT_(?:STYLE|DATA|MODEL|3D|SCRIPT)\*\//g,match=>replacements[match]);
+  return html.replace(/<!--REPORT_[A-Z_]+-->|\/\*REPORT_[A-Z_0-9]+\*\//g,match=>replacements[match]);
 }
 
 function getOption(args, flag) {

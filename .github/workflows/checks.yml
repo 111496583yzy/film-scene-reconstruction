@@ -24,6 +24,7 @@ jobs:
           node scripts/scene-selftest.mjs
           node scripts/scene-3d-selftest.mjs
           node scripts/ui-selftest.mjs
+          node scripts/rehearsal-selftest.mjs
       - name: Offline model-adapter tests (no API calls)
         run: |
           python3 scripts/test_qwen_omni_enrich.py
