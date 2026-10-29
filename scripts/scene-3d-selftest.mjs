@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {dirname,join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {worldPoint,boxWorld,horizontalToVerticalFov,interpolatePose,frustumCorners,geometrySummary,interpolateSubject} from '../assets/scene-math.mjs';
+import {CAMERA_ANNOTATION,cameraAnnotationStyle} from '../assets/scene-style.mjs';
 import {validateScene,renderReport,initScene} from './scene-report.mjs';
 const root=join(dirname(fileURLToPath(import.meta.url)),'..');
 const shots=JSON.parse(readFileSync(join(root,'examples/scene-demo-shots.json'),'utf8'));
@@ -11,6 +12,16 @@ const scene=JSON.parse(readFileSync(join(root,'examples/scene-demo.json'),'utf8'
 let passed=0;
 function test(name,fn){try{fn();passed++;}catch(e){process.stderr.write(`FAIL ${name}: ${e.stack}\n`);process.exitCode=1;}}
 const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-8,`${a} !== ${b}`);
+test('camera annotation normalizes a semantic theme color',()=>assert.equal(cameraAnnotationStyle('  #2457DF  ').color,'#2457df'));
+test('camera annotation rejects malformed or missing theme colors',()=>{for(const value of [undefined,null,42,{},'', 'red','#abc','#2457dfff','url(https://example.invalid)'])assert.equal(cameraAnnotationStyle(value).color,CAMERA_ANNOTATION.fallbackColor);});
+test('camera label and outline use one annotation color',()=>{const s=cameraAnnotationStyle('#3163d9');assert.equal(s.color,'#3163d9');assert.equal(s.labelText,'#ffffff');assert.equal(s.edgeOpacity,1);});
+test('camera fill stays translucent without weakening its edges',()=>{const s=cameraAnnotationStyle();assert.ok(s.fillOpacity>0&&s.fillOpacity<=.06);assert.ok(s.edgeOpacity>=.9);assert.ok(s.bodyEmissive>0&&s.tripodEmissive>0);});
+test('camera style resolution never mutates its shared defaults',()=>{const before={...CAMERA_ANNOTATION};const s=cameraAnnotationStyle('#123456');s.fillOpacity=1;assert.deepEqual({...CAMERA_ANNOTATION},before);assert.ok(cameraAnnotationStyle().fillOpacity<1);});
+function colorLuminance(hex){const v=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(n=>n<=.04045?n/12.92:((n+.055)/1.055)**2.4);return v[0]*.2126+v[1]*.7152+v[2]*.0722;}
+function colorContrast(a,b){const v=[colorLuminance(a),colorLuminance(b)].sort((x,y)=>x-y);return(v[1]+.05)/(v[0]+.05);}
+test('declared camera label pair retains readable contrast',()=>{const s=cameraAnnotationStyle();assert.ok(colorContrast(s.labelText,s.color)>=4.5);});
+test('default camera annotation separates from declared neutral floor and dark backdrop',()=>{const s=cameraAnnotationStyle();for(const bg of ['#cac3b4','#0a0a0a'])assert.ok(colorContrast(s.color,bg)>=3);});
+test('both theme legends and renderer fallback resolve to the same camera role',()=>{const css=readFileSync(join(root,'assets/scene-report.css'),'utf8'),tokens=[...css.matchAll(/--camera:(#[0-9a-f]{6});/gi)].map(m=>m[1]);assert.equal(tokens.length,2);for(const token of tokens)assert.equal(cameraAnnotationStyle(token).color,CAMERA_ANNOTATION.fallbackColor);});
 const volume={width:100,depth:140,height:30,humanHeight:7.5};
 test('center is a real XYZ position with elevation',()=>assert.deepEqual(worldPoint([50,50],6,volume),[0,6,0]));
 test('horizontal depth maps to Z, not a 2D skew',()=>assert.deepEqual(worldPoint([100,100],12,volume),[50,12,70]));

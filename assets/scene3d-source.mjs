@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import {worldPoint,boxWorld,horizontalToVerticalFov,interpolatePose,interpolateSubject,frustumCorners,geometrySummary} from './scene-math.mjs';
+import {CAMERA_ANNOTATION,cameraAnnotationStyle} from './scene-style.mjs';
 
-const COLORS={floor:0xcac3b4,wall:0xe7dacc,trim:0xb49764,carpet:0x864047,skin:0xd2b499,camera:0x7fa6dc,light:0xf0ca6e,person:0xeee9df,dark:0x28333b};
+const COLORS={floor:0xcac3b4,wall:0xe7dacc,trim:0xb49764,carpet:0x864047,skin:0xd2b499,light:0xf0ca6e,person:0xeee9df,dark:0x28333b};
 const asColor=(v,fallback)=>/^#[0-9a-f]{6}$/i.test(v||'')?new THREE.Color(v):new THREE.Color(fallback);
 const V=p=>new THREE.Vector3(...p);
 function disposeGroup(group){group.traverse(o=>{o.geometry?.dispose();if(o.material)for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();o.material?.map?.dispose();});group.clear();}
@@ -167,13 +168,13 @@ function makeRig(parent,cam,vol,color,opacity=1){
   if(!cam.position)return null;
   const height=cam.elevation??vol.humanHeight*.78,pos=worldPoint(cam.position,height,vol),target=worldPoint(cam.target,cam.targetElevation??vol.humanHeight*.66,vol);
   const g=new THREE.Group(),origin=V(pos),aim=V(target),base=worldPoint(cam.position,0,vol);
-  const mark=material(color,{transparent:opacity<1,opacity});
+  const mark=material(color,{transparent:opacity<1,opacity,emissive:color,emissiveIntensity:opacity===1?CAMERA_ANNOTATION.bodyEmissive:0});
   // Actual 3D body and lens, supported by three separate tripod legs.
   const body=mesh(new THREE.BoxGeometry(2.2,1.45,2),mark,g,[0,0,0]);
   const lens=mesh(new THREE.CylinderGeometry(.7,.83,1.7,12),mark.clone(),g,[0,0,-1.7]);lens.rotation.x=Math.PI/2;
   mesh(new THREE.CylinderGeometry(.52,.52,.12,12),material(0x1c1c1e),g,[0,0,-2.57]).rotation.x=Math.PI/2;
   g.position.copy(origin);g.lookAt(aim);g.rotateY(Math.PI);parent.add(g);
-  if(opacity>.15){const stand=new THREE.Group();for(let i=0;i<3;i++){const a=i*Math.PI*2/3;beam(stand,[base[0],Math.max(.3,height-.9),base[2]],[base[0]+Math.cos(a)*2,0,base[2]+Math.sin(a)*2],.11,0x5a5a5e);}parent.add(stand);}
+  if(opacity>.15){const stand=new THREE.Group();for(let i=0;i<3;i++){const a=i*Math.PI*2/3,leg=beam(stand,[base[0],Math.max(.3,height-.9),base[2]],[base[0]+Math.cos(a)*2,0,base[2]+Math.sin(a)*2],.11,opacity===1?color:0x5a5a5e);if(opacity===1&&leg){leg.material.emissive.copy(color);leg.material.emissiveIntensity=CAMERA_ANNOTATION.tripodEmissive;}}parent.add(stand);}
   return {group:g,pos,target};
 }
 function drawFrustum(parent,cam,vol,aspect,color){
@@ -182,10 +183,11 @@ function drawFrustum(parent,cam,vol,aspect,color){
   const dist=V(pos).distanceTo(V(target)),far=Math.max(5,Math.min(dist*.96,vol.depth*.88)),corners=frustumCorners(pos,target,angle,aspect,1.8,far);
   const indices=[0,1,2,0,2,3,4,6,5,4,7,6,0,4,5,0,5,1,1,5,6,1,6,2,2,6,7,2,7,3,3,7,4,3,4,0];
   const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(indices.flatMap(i=>corners[i]),3));geo.computeVertexNormals();
-  const solid=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color,side:THREE.DoubleSide,transparent:true,opacity:.13,depthWrite:false}));solid.renderOrder=2;parent.add(solid);
-  for(const a of [0,4])line(parent,[corners[a],corners[a+1],corners[a+2],corners[a+3],corners[a]],color,.7);
-  for(let i=0;i<4;i++)line(parent,[corners[i],corners[i+4]],color,.6);
-  line(parent,[pos,target],color,.9,true);
+  const solid=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color,side:THREE.DoubleSide,transparent:true,opacity:CAMERA_ANNOTATION.fillOpacity,depthWrite:false,toneMapped:false}));solid.renderOrder=2;parent.add(solid);
+  const edge=(points,dashed=false)=>{const o=line(parent,points,color,CAMERA_ANNOTATION.edgeOpacity,dashed);o.material.toneMapped=false;return o;};
+  for(const a of [0,4])edge([corners[a],corners[a+1],corners[a+2],corners[a+3],corners[a]]);
+  for(let i=0;i<4;i++)edge([corners[i],corners[i+4]]);
+  edge([pos,target],true);
   const planes=[new THREE.Plane(new THREE.Vector3(0,1,0),0),new THREE.Plane(new THREE.Vector3(0,-1,0),vol.height),new THREE.Plane(new THREE.Vector3(1,0,0),vol.width/2),new THREE.Plane(new THREE.Vector3(-1,0,0),vol.width/2),new THREE.Plane(new THREE.Vector3(0,0,1),vol.depth/2),new THREE.Plane(new THREE.Vector3(0,0,-1),vol.depth/2)];parent.traverse(o=>{if(o.material&&!o.isSprite)o.material.clippingPlanes=planes;});
 }
 function lightRig(parent,config,vol){
@@ -242,16 +244,17 @@ export class SceneViewer3D{
  }
  drawDynamic(){
   disposeGroup(this.dynamicGroup);if(!this.note||!this.vol)return;
-  const v=this.vol,color=asColor(this.setup?.color,COLORS.camera);
+  // Use the same semantic token as the legend, independent of scene materials.
+  const v=this.vol,style=cameraAnnotationStyle(getComputedStyle(this.container).getPropertyValue('--camera')),color=new THREE.Color(style.color);
   for(const rawWho of this.note.subjects||[]){const who=interpolateSubject(rawWho,this.progress);mannequin(this.dynamicGroup,who,v,true);if(who.marker&&who.position){const at=worldPoint(who.position,(who.elevation??0)+.14,v);mesh(new THREE.CylinderGeometry(2.1,2.1,.13,28),new THREE.MeshBasicMaterial({color:asColor(who.marker,0xe46f58),transparent:true,opacity:.75}),this.dynamicGroup,at,false);}if(who.position){const at=worldPoint(who.position,(who.elevation??0)+(who.modelHeight??v.humanHeight)+(who.pose==='seated'?-2:0)+2,v),label=makeLabel(who.label);label.position.set(...at);this.dynamicGroup.add(label);}}
   if(this.showLights)for(const l of [...(this.sceneData.fixtures||[]),...(this.note.lighting||[])])lightRig(this.dynamicGroup,l,v);
   this.otherRigs=new THREE.Group();this.dynamicGroup.add(this.otherRigs);if(this.showOthers)for(const s of this.allSetups||[])if(s.sceneId===this.note.sceneId&&s.id!==this.note.setupId){makeRig(this.otherRigs,s.camera,v,0x8095a3,.35);if(s.camera.position){const p=worldPoint(s.camera.position,(s.camera.elevation??v.humanHeight*.8)+3,v),label=makeLabel(s.id,'#1c1c1e',{background:'rgba(210,210,214,.95)',height:17});label.position.set(...p);this.otherRigs.add(label);}}
   this.pose=this.setup?interpolatePose(this.setup.camera,this.note.cameraMotion?.path,this.progress):null;
-  if(this.pose?.position){this.activeRig=new THREE.Group();this.dynamicGroup.add(this.activeRig);const rig=makeRig(this.activeRig,this.pose,v,color);drawFrustum(this.activeRig,this.pose,v,this.aspect,color);const label=makeLabel(this.setup.id+' · '+this.setup.label,'#000000',{background:'rgba(255,255,255,.96)',height:26});label.position.set(rig.pos[0],rig.pos[1]+5,rig.pos[2]);this.activeRig.add(label);this.activeRig.visible=this.mode!=='shot';}
+  if(this.pose?.position){this.activeRig=new THREE.Group();this.dynamicGroup.add(this.activeRig);const rig=makeRig(this.activeRig,this.pose,v,color);drawFrustum(this.activeRig,this.pose,v,this.aspect,color);const label=makeLabel(this.setup.id+' · '+this.setup.label,style.labelText,{background:style.color,height:26});label.material.toneMapped=false;label.position.set(rig.pos[0],rig.pos[1]+5,rig.pos[2]);this.activeRig.add(label);this.activeRig.visible=this.mode!=='shot';}
   const main=this.note.subjects?.[0];if(main){const sample=interpolateSubject(main,this.progress);this.container.dataset.subjectHeading=String(sample.headingDeg??0);this.container.dataset.subjectPosition=JSON.stringify(sample.position);}this.container.dataset.setup=this.note.setupId??'unknown';this.container.dataset.shot=this.note.shotId;this.container.dataset.frustum=this.pose?.viewAngleDeg!=null?'estimated':this.pose?.previewAngleDeg!=null?'schematic':'none';
  }
  setOptions({lights,others}){this.showLights=lights;this.showOthers=others;this.drawDynamic();this.render();}
- setTheme(theme){this.theme=theme;this.scene.background.set(theme==='light'?0xececee:0x0a0a0a);this.render();}
+ setTheme(theme){this.theme=theme;this.scene.background.set(theme==='light'?0xececee:0x0a0a0a);this.drawDynamic();this.render();}
  setMode(mode){
   if(mode==='shot'&&!this.pose?.position)return false;const snap=this.camSnap(),prevMode=this.mode;this.mode=mode;if(this.activeRig)this.activeRig.visible=mode!=='shot';
   if(mode==='shot'){this.camera=this.shotCamera;this.controls.enabled=false;this.applyShotView();}
